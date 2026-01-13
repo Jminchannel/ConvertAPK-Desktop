@@ -1,0 +1,57 @@
+name: convertapk
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: web/backend/Dockerfile
+    image: convertapk-backend:latest
+    environment:
+      - TZ=Asia/Shanghai
+      - APK_BUILDER_DATA_DIR=/data
+      - APK_BUILDER_DATA_VOLUME=convertapk-data
+      - APK_BUILDER_GRADLE_CACHE_MODE=volume
+      - APK_BUILDER_GRADLE_CACHE_VOLUME=convertapk-gradle-cache
+    volumes:
+      - convertapk-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: web/frontend
+      dockerfile: Dockerfile
+    image: convertapk-frontend:latest
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+
+  # 仅用于构建 apk-builder 镜像（默认不启动）
+  apk-builder:
+    profiles: ["builder"]
+    build:
+      context: apk-worker
+      dockerfile: Dockerfile
+    image: apk-builder:latest
+    entrypoint: ["/bin/bash", "-lc", "echo 'apk-builder image is ready'; sleep infinity"]
+    restart: "no"
+
+volumes:
+  convertapk-data:
+    name: convertapk-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/convertapk
+  convertapk-gradle-cache:
+    name: convertapk-gradle-cache
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/convertapk/gradle-cache

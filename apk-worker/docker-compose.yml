@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  apk-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: apk-builder:latest
+    container_name: apk-builder
+    
+    # 环境变量配置
+    environment:
+      - APP_NAME=${APP_NAME:-MyApp}
+      - PACKAGE_NAME=${PACKAGE_NAME:-com.example.app}
+      - VERSION_NAME=${VERSION_NAME:-1.0.0}
+      - VERSION_CODE=${VERSION_CODE:-1}
+      - KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD:-android}
+      - KEY_ALIAS=${KEY_ALIAS:-key0}
+      - KEY_PASSWORD=${KEY_PASSWORD:-android}
+    
+    # 挂载目录
+    volumes:
+      # 输入目录 - 放置要构建的ZIP文件
+      - ./input:/workspace/input
+      # 输出目录 - 构建完成的APK
+      - ./output:/workspace/output
+      # 密钥目录 - 可选，放置自定义keystore
+      - ./keystore:/workspace/keystore
+      # Gradle 缓存 - 复用已下载的 Gradle/依赖，避免每次构建重复下载
+      - gradle-cache:/root/.gradle
+    
+    # 工作目录
+    working_dir: /workspace
+    
+    # 限制资源（可选）
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+
+
+
+volumes:
+  gradle-cache:
+
+
+

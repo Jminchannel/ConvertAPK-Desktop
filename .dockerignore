@@ -1,0 +1,27 @@
+.git
+.gitignore
+.idea
+**/.idea
+**/.vscode
+
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+
+**/node_modules
+**/dist
+
+# runtime data (do not bake into images)
+web/backend/uploads
+web/backend/outputs
+web/backend/logs
+web/backend/tasks
+web/backend/gradle-wrapper-cache
+
+apk-worker/input
+apk-worker/output
+apk-worker/keystore
+
+*.log
+*.tmp

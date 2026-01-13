@@ -1,0 +1,28 @@
+{
+  "name": "apk-converter",
+  "version": "1.0.0",
+  "description": "Google AI Studio Web App to APK Converter",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "cropperjs": "^2.1.0",
+    "vue": "^3.3.8",
+    "vue-advanced-cropper": "^2.8.9",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "vite": "^5.0.0"
+  }
+}
+
+
+
+
+
+

@@ -1,0 +1,22 @@
+# 环境变量
+.env
+
+# 输入输出目录内容
+input/*
+output/*
+keystore/*
+
+# 保留目录结构
+!input/.gitkeep
+!output/.gitkeep
+!keystore/.gitkeep
+
+# 日志
+*.log
+
+
+
+
+
+
+
