@@ -47,11 +47,11 @@
 
           <button class="btn btn-primary btn-sm no-drag mobile-hide" @click="openDonation(false)">
             <span class="action-icon">&#x1F496;</span>
-            <span class="action-label">{{ t(\'donation.button\') }}</span>
+            <span class="action-label">{{ t('donation.button') }}</span>
           </button>
           <button class="btn btn-ghost btn-sm no-drag" @click="openSettings">
             <span class="action-icon">&#x1F41B;</span>
-            <span class="action-label">{{ t(\'settings.title\') }}</span>
+            <span class="action-label">{{ t('settings.title') }}</span>
           </button>
 
           <div class="window-controls no-drag" v-if="windowControlsAvailable">
