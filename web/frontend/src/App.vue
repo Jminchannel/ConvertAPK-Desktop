@@ -48,7 +48,7 @@
             <span>♥</span> {{ t('donation.button') }}
           </button>
           <button class="btn btn-ghost btn-sm no-drag" @click="openSettings">
-            <span>??</span> {{ t('settings.title') }}
+            <span>&#x1F41B;</span> {{ t('settings.title') }}
           </button>
 
           <div class="window-controls no-drag" v-if="windowControlsAvailable">

@@ -541,7 +541,7 @@ export const messages = {
       dismiss: '我知道了'
     },
     settings: {
-      title: '??Bug',
+      title: '\u53cd\u9988Bug',
       toolchainSection: '工具链配置',
       toolchainRoot: '工具链存放路径',
       toolchainHint: '建议不要放在 Program Files 目录下',
@@ -853,7 +853,7 @@ export const messages = {
       dismiss: '我知道了'
     },
     settings: {
-      title: '??Bug',
+      title: '\u56de\u5831Bug',
       toolchainSection: '工具鏈設定',
       toolchainRoot: '工具鏈存放路徑',
       toolchainRootPlaceholder: 'D:\\Convertapk\\resources\\toolchain',
