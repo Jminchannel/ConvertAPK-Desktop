@@ -58,6 +58,7 @@ BACKEND_OUTPUT_DIR = DATA_DIR / "outputs"
 LOGS_DIR = DATA_DIR / "logs"
 TASKS_DIR = DATA_DIR / "tasks"  # 每个任务的独立目录
 GRADLE_WRAPPER_CACHE = DATA_DIR / "gradle-wrapper-cache"  # 全局 Gradle wrapper 缓存
+NPM_CACHE_DIR = DATA_DIR / "npm-cache"
 
 # Gradle 缓存策略（解决“开始构建反应慢/要等几分钟”的问题）
 # - volume: 使用 Docker volume 持久化 /root/.gradle（推荐，跨任务复用且不需要拷贝大缓存）
@@ -78,6 +79,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 BACKEND_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 TASKS_DIR.mkdir(parents=True, exist_ok=True)
+NPM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _parse_hex_color(raw: str) -> Optional[Tuple[int, int, int]]:
@@ -283,6 +285,9 @@ class APKBuilder:
         if not status_bar_hidden:
             status_bar_style = "dark" if _is_light_color(status_bar_color) else "light"
 
+        npm_cache_dir = os.getenv('NPM_CONFIG_CACHE', '').strip()
+        if not npm_cache_dir:
+            npm_cache_dir = str(NPM_CACHE_DIR)
         env = {
             "APP_NAME": app_name,
             "PACKAGE_NAME": package_name,
@@ -314,6 +319,7 @@ class APKBuilder:
             # 标记是否复用了keystore（如果复用则不允许重新生成）
             "KEYSTORE_REUSED": "true" if keystore_reused else "false",
             "GRADLE_USER_HOME": str(DATA_DIR / "gradle-user-home"),
+            "NPM_CONFIG_CACHE": npm_cache_dir,
         }
 
         env.update(env_setup.get_env_overrides())
@@ -449,9 +455,11 @@ class APKBuilder:
                 f"KEYSTORE_REUSED={env['KEYSTORE_REUSED']}",
                 # 设置Gradle参数（减少内存占用）
                 "-e",
-                "GRADLE_OPTS=-Xmx2g -Dorg.gradle.daemon=false",
+                "GRADLE_OPTS=-Xmx2g -Dorg.gradle.daemon=true",
             ]
             cmd += task_dir_env_args
+            if task_data_volume:
+                cmd += ['-e', 'NPM_CONFIG_CACHE=/data/npm-cache']
 
             # 可选：允许在后端环境中指定 Gradle 镜像列表（空格分隔）
             gradle_dist_mirrors = os.environ.get("GRADLE_DIST_MIRRORS", "").strip()

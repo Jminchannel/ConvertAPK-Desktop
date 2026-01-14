@@ -68,34 +68,6 @@
     <!-- Main Content -->
     <main class="main">
       <div class="container">
-        <!-- Environment banner -->
-        <div class="env-banner" v-if="envStatus && (!envStatus.ready || envStatus.running)">
-          <div class="env-banner-text">
-            <div class="env-title">{{ envStatus.running ? t('env.preparing') : t('env.missing') }}</div>
-            <div class="env-detail" v-if="envStatus.missing && envStatus.missing.length">
-              {{ t('env.missingList') }}: {{ envMissingText }}
-            </div>
-            <div class="env-detail" v-if="envStatus.port">
-              {{ t('env.port') }}: {{ envStatus.port }}
-            </div>
-            <div class="env-progress" v-if="envStatus.progress_stage">
-              {{ envStatus.progress_stage }}
-              <span v-if="envProgressPercent !== null"> ({{ envProgressPercent }}%)</span>
-            </div>
-            <div class="env-progress-bar" v-if="envStatus.running">
-              <div
-                class="env-progress-fill"
-                :class="{ indeterminate: envProgressPercent === null }"
-                :style="envProgressPercent !== null ? { width: envProgressPercent + '%' } : {}"
-              ></div>
-            </div>
-          </div>
-          <button class="btn btn-warning btn-sm" @click="prepareEnv(true)" :disabled="envPreparing">
-            <span v-if="envPreparing" class="spinner"></span>
-            {{ envPreparing ? t('env.preparing') : t('env.fix') }}
-          </button>
-        </div>
-
         <div v-if="activeAnnouncement" class="card no-drag" style="margin-bottom: 16px;">
           <div class="card-header">
             <div class="card-icon">📢</div>
@@ -740,39 +712,7 @@
           </div>
 
           <div class="settings-dialog-body">
-            <div class="settings-section">
-              <div class="settings-section-title">
-                <span class="section-title-icon">🛠️</span>
-                {{ t('settings.envSection') }}
-              </div>
-              <div class="form-group">
-                <label class="form-label">{{ t('settings.dataRoot') }}</label>
-                <input
-                  type="text"
-                  class="form-input"
-                  v-model="dataRootInput"
-                  :placeholder="t('settings.dataRootPlaceholder')"
-                />
-                <div class="settings-hint">{{ t('settings.dataRootHint') }}</div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">{{ t('settings.npmRegistry') }}</label>
-                <input type="text" class="form-input" v-model="npmRegistryInput" />
-              </div>
-              <div class="grid grid-2">
-                <div class="form-group">
-                  <label class="form-label">{{ t('settings.npmProxy') }}</label>
-                  <input type="text" class="form-input" v-model="npmProxyInput" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">{{ t('settings.npmHttpsProxy') }}</label>
-                  <input type="text" class="form-input" v-model="npmHttpsProxyInput" />
-                </div>
-              </div>
-            </div>
-
-            <div class="divider"></div>
-
+            
             <div class="settings-section">
               <div class="settings-section-title">
                 <span class="section-title-icon">💬</span>
@@ -819,9 +759,6 @@
 
           <div class="settings-dialog-footer">
             <button class="btn btn-secondary btn-sm" @click="closeSettings">{{ t('settings.cancel') }}</button>
-            <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="savingConfig">
-              {{ savingConfig ? t('settings.saving') : t('settings.save') }}
-            </button>
           </div>
         </div>
       </div>
@@ -1011,19 +948,8 @@ const tasks = ref([])
 const queueStatus = ref({ queue_size: 0, running_count: 0, max_concurrent: 1 })
 let pollInterval = null
 
-// Env
-const envStatus = ref(null)
-const envPreparing = ref(false)
-let envPollInterval = null
-
 // Settings
 const showSettings = ref(false)
-const toolchainRootInput = ref('')
-const savingConfig = ref(false)
-const npmRegistryInput = ref('')
-const npmProxyInput = ref('')
-const npmHttpsProxyInput = ref('')
-const dataRootInput = ref('')
 const announcements = ref([])
 const deviceInfo = ref({ cpu: '', ram: '', os: '', cores: '' })
 const feedbackContent = ref('')
@@ -1157,14 +1083,6 @@ const taskStats = computed(() => {
   return { total, success }
 })
 
-const envMissingText = computed(() => (envStatus.value?.missing || []).join(', '))
-const envProgressPercent = computed(() => {
-  const value = envStatus.value?.progress_percent
-  if (value === undefined || value === null) return null
-  const n = Number(value)
-  if (Number.isNaN(n)) return null
-  return Math.max(0, Math.min(100, n))
-})
 const dismissedAnnouncementId = ref(localStorage.getItem('apk_builder_announcement_id'))
 const activeAnnouncement = ref(null)
 const resolveActiveAnnouncement = () => {
@@ -1329,7 +1247,6 @@ const startTask = async (taskId) => {
   try {
     await api.startTask(taskId)
     showToast(t('toast.taskStarted'), 'success')
-    await fetchEnvStatus()
     await refreshTasks()
     startPolling()
   } catch (error) {
@@ -1469,7 +1386,6 @@ const createTask = async () => {
       showToast(t('toast.taskCreated'), 'success')
       try {
         await api.startTask(created.id)
-        await fetchEnvStatus()
         await refreshTasks()
         startPolling()
       } catch (error) {
@@ -1477,7 +1393,6 @@ const createTask = async () => {
       }
     }
     resetForm()
-    await fetchEnvStatus()
     await refreshTasks()
   } catch (error) {
     showToast('操作失败: ' + (error.response?.data?.detail || error.message), 'error')
@@ -1544,74 +1459,12 @@ const refreshLogs = async () => {
   }
 }
 
-// Env
-const fetchEnvStatus = async () => {
-  try {
-    envStatus.value = await api.getEnvStatus()
-    if (envStatus.value?.running) startEnvPolling()
-    else stopEnvPolling()
-  } catch {
-    // ignore
-  }
-}
-const startEnvPolling = () => {
-  if (envPollInterval) return
-  envPollInterval = setInterval(fetchEnvStatus, 2000)
-}
-const stopEnvPolling = () => {
-  if (!envPollInterval) return
-  clearInterval(envPollInterval)
-  envPollInterval = null
-}
-const prepareEnv = async (force = false) => {
-  envPreparing.value = true
-  try {
-    envStatus.value = await api.prepareEnv(force)
-    showToast(t('env.preparing'), 'success')
-    if (envStatus.value?.running) startEnvPolling()
-  } catch (error) {
-    showToast(t('env.failed') + ': ' + (error.response?.data?.detail || error.message), 'error')
-  } finally {
-    envPreparing.value = false
-  }
-}
-
 // Settings
-const openSettings = async () => {
+const openSettings = () => {
   showSettings.value = true
-  try {
-    const cfg = await api.getEnvConfig()
-    toolchainRootInput.value = cfg.toolchain_root || ''
-    dataRootInput.value = cfg.data_root || ''
-    npmRegistryInput.value = cfg.npm_registry || ''
-    npmProxyInput.value = cfg.npm_proxy || ''
-    npmHttpsProxyInput.value = cfg.npm_https_proxy || ''
-  } catch (e) {
-    showToast('获取配置失败: ' + (e.response?.data?.detail || e.message), 'error')
-  }
-}
-const closeSettings = () => (showSettings.value = false)
-const saveSettings = async () => {
-  savingConfig.value = true
-  try {
-    await api.setEnvConfig(
-      toolchainRootInput.value,
-      false,
-      npmRegistryInput.value,
-      npmProxyInput.value,
-      npmHttpsProxyInput.value,
-      dataRootInput.value
-    )
-    showToast('配置已保存', 'success')
-    showSettings.value = false
-    await fetchEnvStatus()
-  } catch (error) {
-    showToast('保存失败: ' + (error.response?.data?.detail || error.message), 'error')
-  } finally {
-    savingConfig.value = false
-  }
 }
 
+const closeSettings = () => (showSettings.value = false)
 const fetchAnnouncements = async () => {
   try {
     const result = await api.getAdminAnnouncements()
@@ -1679,7 +1532,6 @@ const submitFeedback = async () => {
 }
 
 const refreshAll = async () => {
-  await fetchEnvStatus()
   await refreshTasks()
   await fetchAnnouncements()
   await loadSystemInfo()
@@ -1731,7 +1583,6 @@ watch(sortedTasks, () => {
 onMounted(async () => {
   applyTheme(currentTheme.value)
   document.addEventListener('click', handleClickOutside)
-  await fetchEnvStatus()
   await refreshTasks()
   await fetchAnnouncements()
   await loadSystemInfo()
@@ -1746,7 +1597,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopPolling()
-  stopEnvPolling()
   document.removeEventListener('click', handleClickOutside)
   if (appIcon.value && !appIcon.value.startsWith('/api/')) URL.revokeObjectURL(appIcon.value)
   if (cropperImageSrc.value) URL.revokeObjectURL(cropperImageSrc.value)

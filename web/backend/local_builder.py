@@ -693,7 +693,7 @@ def run_local_build(
     process_env.update(env)
     process_env.update(env_setup.get_npm_config())
     gradle_opts = process_env.get("GRADLE_OPTS", "")
-    gradle_opts += " -Dorg.gradle.wrapper.timeout=600000 -Dorg.gradle.daemon=false"
+    gradle_opts += " -Dorg.gradle.wrapper.timeout=600000 -Dorg.gradle.daemon=true"
     gradle_opts += " -Dorg.gradle.internal.http.connectionTimeout=600000"
     gradle_opts += " -Dorg.gradle.internal.http.socketTimeout=600000"
     gradle_opts += " -Dorg.gradle.internal.repository.max.retries=5"
@@ -924,7 +924,7 @@ def run_local_build(
     _ensure_gradle_properties(android_project_root, on_log=on_log)
     gradle_cmd = [str(gradlew)]
     gradle_cmd.append("bundleRelease" if output_format == "aab" else "assembleRelease")
-    gradle_cmd.extend(["--no-daemon", "--stacktrace", "--info", "--build-cache"])
+    gradle_cmd.extend(["--stacktrace", "--info", "--build-cache"])
     init_script = _write_gradle_init(task_dir, on_log=on_log)
     gradle_cmd.extend(["--init-script", str(init_script)])
     _run_cmd(gradle_cmd, cwd=gradlew.parent, env=process_env, on_log=on_log)
