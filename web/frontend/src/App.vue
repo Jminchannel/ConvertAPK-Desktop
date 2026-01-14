@@ -1317,7 +1317,7 @@ const useTaskConfig = (task) => {
 
   if (task.icon_filename) {
     uploadedIcon.value = { filename: task.icon_filename, reused: true }
-    appIcon.value = `/api/icon/${task.id}`
+    appIcon.value = api.getIconUrl(task.id)
   } else {
     uploadedIcon.value = null
     appIcon.value = null

@@ -67,7 +67,8 @@ export const getTasks = async () => {
 
 // 获取任务详情
 export const getTask = async (taskId) => {
-  const response = await api.get(`/tasks/${taskId}`)
+  const clientId = getClientId()
+  const response = await api.get(`/tasks/${taskId}`, { params: { client_id: clientId } })
   return response.data
 }
 
@@ -114,13 +115,20 @@ export const updateTask = async (taskId, updateData) => {
 
 // 获取任务日志
 export const getTaskLogs = async (taskId, lines = 100) => {
-  const response = await api.get(`/tasks/${taskId}/logs?lines=${lines}`)
+  const clientId = getClientId()
+  const response = await api.get(`/tasks/${taskId}/logs`, { params: { lines, client_id: clientId } })
   return response.data
 }
 
 // 获取下载链接
 export const getDownloadUrl = (taskId) => {
-  return `/api/download/${taskId}`
+  const clientId = getClientId()
+  return `/api/download/${taskId}?client_id=${encodeURIComponent(clientId)}`
+}
+
+export const getIconUrl = (taskId) => {
+  const clientId = getClientId()
+  return `/api/icon/${taskId}?client_id=${encodeURIComponent(clientId)}`
 }
 
 // 获取构建队列状态

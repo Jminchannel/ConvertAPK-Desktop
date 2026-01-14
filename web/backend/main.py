@@ -42,6 +42,22 @@ app = FastAPI(
 BUILDER_MODE = os.getenv("APK_BUILDER_MODE", "local").strip().lower()
 LOCAL_MODE = BUILDER_MODE == "local"
 
+
+def _normalize_client_id(value: str | None) -> str:
+    return str(value or "").strip()
+
+
+def _require_client_id(value: str | None) -> str:
+    client_id = _normalize_client_id(value)
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id is required")
+    return client_id
+
+
+def _assert_task_owner(task: BuildTask, client_id: str) -> None:
+    if not task.client_id or task.client_id != client_id:
+        raise HTTPException(status_code=403, detail="无权操作此任务")
+
 FRONTEND_LOGGED = False
 FRONTEND_LOG_PATH = Path(os.getenv("APPDATA", ".")) / "ConvertAPK" / "frontend-resolve.log"
 BACKEND_ENV_LOG_PATH = Path(os.getenv("APPDATA", ".")) / "ConvertAPK" / "backend-env.log"
@@ -316,6 +332,7 @@ async def create_task(task_data: BuildTaskCreate):
     """创建构建任务"""
     task_id = str(uuid.uuid4())
     now = datetime.now()
+    client_id = _require_client_id(task_data.client_id)
 
     mode = (task_data.mode or "convert").strip().lower()
     if mode not in {"convert", "web"}:
@@ -328,8 +345,12 @@ async def create_task(task_data: BuildTaskCreate):
     
     # 验证复用的任务是否存在
     reuse_from = task_data.reuse_keystore_from
-    if reuse_from and reuse_from not in tasks_db:
-        raise HTTPException(status_code=400, detail="要复用签名的任务不存在")
+    if reuse_from:
+        reuse_task = tasks_db.get(reuse_from)
+        if not reuse_task:
+            raise HTTPException(status_code=400, detail="要复用签名的任务不存在")
+        if reuse_task.client_id != client_id:
+            raise HTTPException(status_code=403, detail="无权复用其他任务的签名")
     
     # 创建任务专属目录
     task_dir = TASKS_DIR / task_id
@@ -379,7 +400,7 @@ async def create_task(task_data: BuildTaskCreate):
     
     task = BuildTask(
         id=task_id,
-        client_id=task_data.client_id,  # ???ID????
+        client_id=client_id,
         mode=mode,
         web_url=web_url,
         filename="project.zip" if mode == "convert" else None,
@@ -425,19 +446,19 @@ async def create_task(task_data: BuildTaskCreate):
 @app.get("/api/tasks", response_model=List[BuildTaskResponse])
 async def list_tasks(client_id: str = None):
     """获取任务列表，按client_id筛选"""
-    if client_id:
-        matched = [task for task in tasks_db.values() if task.client_id == client_id]
-        if matched or not LOCAL_MODE:
-            return matched
-    return list(tasks_db.values())
+    client_id = _require_client_id(client_id)
+    return [task for task in tasks_db.values() if task.client_id == client_id]
 
 
 @app.get("/api/tasks/{task_id}", response_model=BuildTaskResponse)
-async def get_task(task_id: str):
+async def get_task(task_id: str, client_id: str = None):
     """获取任务详情"""
     if task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="任务不存在")
-    return tasks_db[task_id]
+    client_id = _require_client_id(client_id)
+    task = tasks_db[task_id]
+    _assert_task_owner(task, client_id)
+    return task
 
 
 @app.delete("/api/tasks/{task_id}")
@@ -447,10 +468,8 @@ async def delete_task(task_id: str, client_id: str = None):
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
-    
-    # 验证所有权
-    if not LOCAL_MODE and task.client_id and task.client_id != client_id:
-        raise HTTPException(status_code=403, detail="无权删除此任务")
+    client_id = _require_client_id(client_id)
+    _assert_task_owner(task, client_id)
     
     del tasks_db[task_id]
     try:
@@ -478,11 +497,9 @@ async def delete_task(task_id: str, client_id: str = None):
 
 @app.post("/api/tasks/cancel-running")
 async def cancel_running_tasks(payload: dict):
-    client_id = str(payload.get("client_id", "")).strip()
-    if not LOCAL_MODE and not client_id:
-        raise HTTPException(status_code=400, detail="client_id is required")
+    client_id = _require_client_id(payload.get("client_id"))
     runner = get_task_runner()
-    canceled = runner.cancel_running_tasks("" if LOCAL_MODE else client_id)
+    canceled = runner.cancel_running_tasks(client_id)
     return {"canceled": canceled}
 
 
@@ -493,10 +510,8 @@ async def start_task(task_id: str, client_id: str = None):
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
-    
-    # 验证所有权
-    if not LOCAL_MODE and task.client_id and task.client_id != client_id:
-        raise HTTPException(status_code=403, detail="无权操作此任务")
+    client_id = _require_client_id(client_id)
+    _assert_task_owner(task, client_id)
     
     if task.status != BuildStatus.PENDING:
         raise HTTPException(status_code=400, detail="任务状态不允许启动")
@@ -559,11 +574,10 @@ async def cancel_task(task_id: str, payload: dict = Body(...)):
     if task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="任务不存在")
     task = tasks_db[task_id]
-    client_id = str(payload.get("client_id", "")).strip()
-    if not LOCAL_MODE and task.client_id and task.client_id != client_id:
-        raise HTTPException(status_code=403, detail="无权操作此任务")
+    client_id = _require_client_id(payload.get("client_id"))
+    _assert_task_owner(task, client_id)
     runner = get_task_runner()
-    ok = runner.cancel_task(task_id, "" if LOCAL_MODE else client_id)
+    ok = runner.cancel_task(task_id, client_id)
     if not ok:
         raise HTTPException(status_code=400, detail="任务无法取消")
     try:
@@ -574,8 +588,13 @@ async def cancel_task(task_id: str, payload: dict = Body(...)):
 
 
 @app.get("/api/icon/{task_id}")
-async def get_icon(task_id: str):
+async def get_icon(task_id: str, client_id: str = None):
     """获取任务的图标文件"""
+    if task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    client_id = _require_client_id(client_id)
+    task = tasks_db[task_id]
+    _assert_task_owner(task, client_id)
     # 先从任务目录查找
     task_icon = TASKS_DIR / task_id / "input" / "logo.png"
     if task_icon.exists():
@@ -598,12 +617,14 @@ async def get_icon(task_id: str):
 
 
 @app.get("/api/download/{task_id}")
-async def download_file(task_id: str):
+async def download_file(task_id: str, client_id: str = None):
     """下载构建结果"""
     if task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
+    client_id = _require_client_id(client_id)
+    _assert_task_owner(task, client_id)
     
     if task.status != BuildStatus.SUCCESS:
         raise HTTPException(status_code=400, detail="任务未完成或构建失败")
@@ -637,10 +658,8 @@ async def retry_task(task_id: str, client_id: str = None):
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
-    
-    # 验证所有权
-    if not LOCAL_MODE and task.client_id and task.client_id != client_id:
-        raise HTTPException(status_code=403, detail="无权操作此任务")
+    client_id = _require_client_id(client_id)
+    _assert_task_owner(task, client_id)
     
     if task.status not in [BuildStatus.FAILED, BuildStatus.SUCCESS]:
         raise HTTPException(status_code=400, detail="只能重试失败或已完成的任务")
@@ -668,10 +687,8 @@ async def update_task(task_id: str, update_data: UpdateTaskRequest):
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
-    
-    # 验证所有权
-    if not LOCAL_MODE and task.client_id and task.client_id != update_data.client_id:
-        raise HTTPException(status_code=403, detail="无权修改此任务")
+    client_id = _require_client_id(update_data.client_id)
+    _assert_task_owner(task, client_id)
     
     if task.status != BuildStatus.SUCCESS:
         raise HTTPException(status_code=400, detail="只能更新已成功的任务")
@@ -759,12 +776,14 @@ async def update_task(task_id: str, update_data: UpdateTaskRequest):
 
 
 @app.get("/api/tasks/{task_id}/logs")
-async def get_task_logs(task_id: str, lines: int = 100):
+async def get_task_logs(task_id: str, lines: int = 100, client_id: str = None):
     """获取任务日志"""
     if task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="任务不存在")
     
     task = tasks_db[task_id]
+    client_id = _require_client_id(client_id)
+    _assert_task_owner(task, client_id)
     
     # 优先从内存中获取日志
     if hasattr(task, 'logs') and task.logs:
