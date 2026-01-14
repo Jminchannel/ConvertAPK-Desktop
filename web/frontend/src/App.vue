@@ -29,8 +29,8 @@
           <!-- Language -->
           <div class="lang-switch">
             <button class="btn btn-ghost btn-sm no-drag" @click="showLangMenu = !showLangMenu">
-              <span class=\"action-icon\">&#x1F310;</span>
-              <span class=\"lang-label\">{{ currentLangLabel }}</span>
+              <span class="action-icon">&#x1F310;</span>
+              <span class="lang-label">{{ currentLangLabel }}</span>
             </button>
             <div class="lang-menu" v-if="showLangMenu">
               <button
