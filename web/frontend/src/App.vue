@@ -21,8 +21,8 @@
               @click="toggleTheme"
               :title="currentTheme === 'dark' ? t('theme.light') : t('theme.dark')"
             >
-              <span v-if="currentTheme === 'dark'">☀️</span>
-              <span v-else>🌙</span>
+              <span v-if="currentTheme === 'dark'">&#x2600;</span>
+              <span v-else>&#x1F319;</span>
             </button>
           </div>
 

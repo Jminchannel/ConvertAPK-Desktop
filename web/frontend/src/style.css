@@ -916,8 +916,18 @@ body {
 @media (max-width: 640px) {
   body { background-attachment: scroll; }
   .header { height: auto; padding: 10px 0; }
-  .header-content { flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 16px; }
-  .header-actions { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+  .header-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 16px;
+    flex-wrap: nowrap;
+  }
+  .logo { flex: 0 1 auto; min-width: 0; width: auto; justify-content: flex-end; gap: 10px; }
+  .logo > div:last-child { text-align: right; }
+  .logo-text { font-size: 15px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { flex: 0 0 auto; width: auto; flex-wrap: nowrap; justify-content: flex-end; }
   .header-actions .action-label,
   .header-actions .lang-label { display: none; }
   .header-actions .btn { padding: 6px 10px; gap: 6px; }
