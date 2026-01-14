@@ -131,48 +131,128 @@ log_info "APP_NAME: '${APP_NAME:-未设置}'"
 log_info "PACKAGE_NAME: '${PACKAGE_NAME:-未设置}'"
 log_info "=================================="
 
+TASK_MODE=${TASK_MODE:-convert}
+TASK_MODE="$(echo "$TASK_MODE" | tr '[:upper:]' '[:lower:]')"
+ANDROID_DIR="android"
+PROJECT_DIR="/workspace/project"
+log_info "TASK_MODE: '${TASK_MODE}'"
+
 # ============================================
 # 步骤 0: 准备工作
 # ============================================
-log_info "Step 0: 准备工作..."
-
-# 检查输入目录是否有ZIP文件
-ZIP_FILE=$(find $INPUT_DIR -name "*.zip" -type f | head -n 1)
-
-if [ -z "$ZIP_FILE" ]; then
-    log_error "在 $INPUT_DIR 中没有找到ZIP文件"
-    exit 1
-fi
-
-log_info "找到ZIP文件: $ZIP_FILE"
-
-# 创建项目工作目录
-PROJECT_DIR=/workspace/project
-rm -rf $PROJECT_DIR
-mkdir -p $PROJECT_DIR
-
-# 解压ZIP文件
-log_info "解压项目文件..."
-unzip -q "$ZIP_FILE" -d $PROJECT_DIR
-check_error "解压失败"
-
-# 找到实际的项目根目录(可能在子目录中)
-# 查找包含package.json的目录
-PACKAGE_JSON=$(find $PROJECT_DIR -name "package.json" -type f | head -n 1)
-if [ -z "$PACKAGE_JSON" ]; then
-    log_error "未找到 package.json 文件"
-    exit 1
-fi
-
-PROJECT_ROOT=$(dirname "$PACKAGE_JSON")
-log_info "项目根目录: $PROJECT_ROOT"
-
-cd $PROJECT_ROOT
-
-log_success "准备工作完成"
-
+# Step 0: prepare
 # ============================================
-# 步骤 1: 构建 Web 项目
+log_info "Step 0: ????..."
+
+if [ "$TASK_MODE" = "web" ]; then
+    log_info "Step 1: ?? Web ??..."
+    TEMPLATE_DIR="/workspace/templates/Tubbim"
+    if [ ! -d "$TEMPLATE_DIR" ]; then
+        log_error "Web template not found: $TEMPLATE_DIR"
+        exit 1
+    fi
+    rm -rf "$PROJECT_DIR"
+    mkdir -p "$PROJECT_DIR"
+    cp -R "$TEMPLATE_DIR"/. "$PROJECT_DIR"/
+    PROJECT_ROOT="$PROJECT_DIR"
+    ANDROID_DIR="."
+
+    if [ -z "$WEB_URL" ]; then
+        log_error "WEB_URL is required for web mode"
+        exit 1
+    fi
+
+    PROJECT_ROOT="$PROJECT_ROOT" node << 'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const projectRoot = process.env.PROJECT_ROOT || process.cwd();
+const appName = process.env.APP_NAME || 'MyApp';
+const packageName = process.env.PACKAGE_NAME || 'com.example.app';
+const versionName = process.env.VERSION_NAME || '1.0.0';
+const versionCode = process.env.VERSION_CODE || '1';
+const webUrl = (process.env.WEB_URL || '').trim();
+const statusBarHidden = String(process.env.STATUS_BAR_HIDDEN || '').trim().toLowerCase() === 'true';
+const statusBarColorRaw = String(process.env.STATUS_BAR_COLOR || 'transparent').trim().toLowerCase();
+const statusBarStyle = String(process.env.STATUS_BAR_STYLE || 'light').trim().toLowerCase();
+const lightStatusBarIcons = statusBarStyle === 'dark';
+const statusBarBackground =
+  statusBarColorRaw === '#ffffff' || statusBarColorRaw === 'white' || statusBarColorRaw === '#ffffffff'
+    ? 'white'
+    : 'transparent';
+const doubleClickExit = String(process.env.DOUBLE_CLICK_EXIT || '').trim().toLowerCase() !== 'false';
+
+const stringsFile = path.join(projectRoot, 'app', 'src', 'main', 'res', 'values', 'strings.xml');
+if (fs.existsSync(stringsFile)) {
+  let text = fs.readFileSync(stringsFile, 'utf8');
+  text = text.replace(/(<string\s+name="app_name">)(.*?)(<\/string>)/, `$1${appName}$3`);
+  fs.writeFileSync(stringsFile, text, 'utf8');
+}
+
+let gradleFile = path.join(projectRoot, 'app', 'build.gradle.kts');
+if (!fs.existsSync(gradleFile)) {
+  gradleFile = path.join(projectRoot, 'app', 'build.gradle');
+}
+if (fs.existsSync(gradleFile)) {
+  let gtext = fs.readFileSync(gradleFile, 'utf8');
+  gtext = gtext.replace(/applicationId\s*=\s*"[^"]+"/, `applicationId = "${packageName}"`);
+  gtext = gtext.replace(/versionCode\s*=\s*\d+/, `versionCode = ${versionCode}`);
+  gtext = gtext.replace(/versionName\s*=\s*"[^"]+"/, `versionName = "${versionName}"`);
+  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"WEBVIEW_URL"[\s\S]*?\)/, `buildConfigField("String", "WEBVIEW_URL", "\"${webUrl}\"")`);
+  gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"HIDE_STATUS_BAR"[\s\S]*?\)/, `buildConfigField("boolean", "HIDE_STATUS_BAR", "${statusBarHidden}")`);
+  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"STATUS_BAR_BACKGROUND"[\s\S]*?\)/, `buildConfigField("String", "STATUS_BAR_BACKGROUND", "\"${statusBarBackground}\"")`);
+  gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"LIGHT_STATUS_BAR_ICONS"[\s\S]*?\)/, `buildConfigField("boolean", "LIGHT_STATUS_BAR_ICONS", "${lightStatusBarIcons}")`);
+  gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"DOUBLE_CLICK_EXIT"[\s\S]*?\)/, `buildConfigField("boolean", "DOUBLE_CLICK_EXIT", "${doubleClickExit}")`);
+  fs.writeFileSync(gradleFile, gtext, 'utf8');
+}
+NODE
+
+    if [ -f "$INPUT_DIR/logo.png" ]; then
+        drawable_dir="$PROJECT_ROOT/app/src/main/res/drawable"
+        if [ -d "$drawable_dir" ]; then
+            rm -f "$drawable_dir/ic_launcher_foreground.xml"
+            cp "$INPUT_DIR/logo.png" "$drawable_dir/ic_launcher_foreground.png"
+            log_info "Template launcher icon updated"
+        fi
+    fi
+
+    cd "$PROJECT_ROOT"
+    log_success "Step 0 done"
+else
+    # check zip for convert mode
+    ZIP_FILE=$(find $INPUT_DIR -name "*.zip" -type f | head -n 1)
+
+    if [ -z "$ZIP_FILE" ]; then
+        log_error "No ZIP found in $INPUT_DIR"
+        exit 1
+    fi
+
+    log_info "Found ZIP: $ZIP_FILE"
+
+    # create project dir
+    rm -rf $PROJECT_DIR
+    mkdir -p $PROJECT_DIR
+
+    # unzip
+    log_info "Unzip project..."
+    unzip -q "$ZIP_FILE" -d $PROJECT_DIR
+    check_error "Unzip failed"
+
+    # find package.json
+    PACKAGE_JSON=$(find $PROJECT_DIR -name "package.json" -type f | head -n 1)
+    if [ -z "$PACKAGE_JSON" ]; then
+        log_error "package.json not found"
+        exit 1
+    fi
+
+    PROJECT_ROOT=$(dirname "$PACKAGE_JSON")
+    log_info "Project root: $PROJECT_ROOT"
+
+    cd $PROJECT_ROOT
+
+    log_success "Step 0 done"
+fi
+if [ "$TASK_MODE" != "web" ]; then
 # ============================================
 log_info "Step 1: 构建 Web 项目..."
 
@@ -668,6 +748,8 @@ log_success "代码同步完成"
 
 # 注入下载处理（外部浏览器下载）
 log_info "注入 Android 下载处理..."
+fi
+export ANDROID_DIR="$ANDROID_DIR"
 node << 'NODE'
 const fs = require("fs");
 const path = require("path");
@@ -702,7 +784,7 @@ function findMainActivity(javaRoot) {
 }
 
 const projectRoot = process.cwd();
-const androidDir = path.join(projectRoot, "android");
+const androidDir = path.resolve(process.env.ANDROID_DIR || path.join(projectRoot, "android"));
 const javaRoot = path.join(androidDir, "app", "src", "main", "java");
 if (!fs.existsSync(javaRoot)) {
   process.exit(0);
@@ -1163,14 +1245,17 @@ NODE
 log_info "Step 6: 配置 Android 项目..."
 
 # 创建 local.properties
-cat > android/local.properties << EOF
+cat > "$ANDROID_DIR/local.properties" << EOF
 sdk.dir=$ANDROID_HOME
 EOF
 
 log_info "已创建 local.properties"
 
 # 修改版本号
-GRADLE_FILE="android/app/build.gradle"
+GRADLE_FILE="$ANDROID_DIR/app/build.gradle"
+if [ ! -f "$GRADLE_FILE" ]; then
+    GRADLE_FILE="$ANDROID_DIR/app/build.gradle.kts"
+fi
 if [ -f "$GRADLE_FILE" ]; then
     # 更新 versionName 和 versionCode
     sed -i "s/versionName \".*\"/versionName \"$VERSION_NAME\"/" $GRADLE_FILE
@@ -1195,7 +1280,7 @@ else
     log_info "Step 7: 构建 Release APK..."
 fi
 
-cd android
+cd "$ANDROID_DIR"
 
 # 给 gradlew 执行权限
 chmod +x gradlew
@@ -1333,7 +1418,7 @@ else
     log_info "Step 9: 对齐 APK (zipalign)..."
 fi
 
-cd android
+cd "$ANDROID_DIR"
 
 FINAL_OUTPUT=""
 
