@@ -913,6 +913,57 @@ body {
   .donation-qr-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 640px) {
+  body { background-attachment: scroll; }
+  .header { height: auto; padding: 10px 0; }
+  .header-content { flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 16px; }
+  .header-actions { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+  .header-actions .action-label,
+  .header-actions .lang-label { display: none; }
+  .header-actions .btn { padding: 6px 10px; gap: 6px; }
+  .header-actions .mobile-hide { display: none; }
+  .window-controls { display: none; }
+  .container { padding: 0 16px; }
+  .main { padding: 16px 0; }
+  .logo-text { font-size: 16px; }
+  .mode-tabs { width: 100%; }
+  .mode-tab { flex: 1; justify-content: center; }
+  .steps { flex-direction: column; gap: 12px; }
+  .step { justify-content: flex-start; }
+  .card { padding: 18px; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .task-item { flex-direction: column; align-items: flex-start; }
+  .task-actions { width: 100%; flex-wrap: wrap; }
+  .stats { grid-template-columns: 1fr; }
+  .cropper-dialog, .logs-dialog, .settings-dialog, .donation-dialog {
+    width: 94%;
+    max-width: 94%;
+    max-height: 90vh;
+  }
+  .dialog-header,
+  .cropper-dialog-header,
+  .logs-dialog-header,
+  .settings-dialog-header,
+  .donation-dialog-header {
+    padding: 12px 16px;
+  }
+  .dialog-body,
+  .cropper-dialog-body,
+  .logs-dialog-body,
+  .settings-dialog-body,
+  .donation-dialog-body {
+    padding: 16px;
+    max-height: 70vh;
+  }
+  .dialog-footer,
+  .cropper-dialog-footer,
+  .logs-dialog-footer,
+  .settings-dialog-footer,
+  .donation-dialog-footer {
+    padding: 12px 16px;
+  }
+}
+
 /* Cropper */
 .cropper-component {
   height: 400px;
