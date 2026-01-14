@@ -743,12 +743,7 @@
             <div class="settings-section">
               <div class="settings-section-title">
                 <span class="section-title-icon">🛠️</span>
-                {{ t('settings.toolchainSection') }}
-              </div>
-              <div class="form-group">
-                <label class="form-label">{{ t('settings.toolchainRoot') }}</label>
-                <input type="text" class="form-input" v-model="toolchainRootInput" />
-                <div class="settings-hint">{{ t('settings.toolchainHint') }}</div>
+                {{ t('settings.envSection') }}
               </div>
               <div class="form-group">
                 <label class="form-label">{{ t('settings.dataRoot') }}</label>
@@ -774,32 +769,8 @@
                   <input type="text" class="form-input" v-model="npmHttpsProxyInput" />
                 </div>
               </div>
-              <label class="settings-checkbox">
-                <input type="checkbox" v-model="toolchainMigrate" />
-                {{ t('settings.migrateToolchain') }}
-              </label>
             </div>
 
-            <div class="divider"></div>
-
-            <div class="settings-section">
-              <div class="settings-section-title">
-                <span class="section-title-icon">🔄</span>
-                {{ t('settings.updateSection') }}
-              </div>
-              <div class="form-group">
-                <label class="form-label">{{ t('settings.updateMode') }}</label>
-                <select class="form-input form-select" v-model="updatePreference">
-                  <option value="silent">{{ t('settings.updateSilent') }}</option>
-                  <option value="prompt">{{ t('settings.updatePrompt') }}</option>
-                  <option value="notify_only">{{ t('settings.updateNotify') }}</option>
-                </select>
-              </div>
-              <div class="flex-row-center">
-                <div class="settings-hint mb-0">{{ t('settings.currentVersion', { version: appVersion || '-' }) }}</div>
-                <button class="btn btn-secondary btn-sm ml-auto" @click="checkForUpdates">{{ t('settings.checkUpdate') }}</button>
-              </div>
-            </div>
             <div class="divider"></div>
 
             <div class="settings-section">
@@ -848,7 +819,7 @@
 
           <div class="settings-dialog-footer">
             <button class="btn btn-secondary btn-sm" @click="closeSettings">{{ t('settings.cancel') }}</button>
-            <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="savingConfig || !toolchainRootInput">
+            <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="savingConfig">
               {{ savingConfig ? t('settings.saving') : t('settings.save') }}
             </button>
           </div>
@@ -1048,14 +1019,11 @@ let envPollInterval = null
 // Settings
 const showSettings = ref(false)
 const toolchainRootInput = ref('')
-const toolchainMigrate = ref(true)
 const savingConfig = ref(false)
 const npmRegistryInput = ref('')
 const npmProxyInput = ref('')
 const npmHttpsProxyInput = ref('')
 const dataRootInput = ref('')
-const updatePreference = ref(localStorage.getItem('apk_builder_update_pref') || 'prompt')
-const appVersion = ref('')
 const announcements = ref([])
 const deviceInfo = ref({ cpu: '', ram: '', os: '', cores: '' })
 const feedbackContent = ref('')
@@ -1624,12 +1592,11 @@ const openSettings = async () => {
 }
 const closeSettings = () => (showSettings.value = false)
 const saveSettings = async () => {
-  if (!toolchainRootInput.value) return
   savingConfig.value = true
   try {
     await api.setEnvConfig(
       toolchainRootInput.value,
-      toolchainMigrate.value,
+      false,
       npmRegistryInput.value,
       npmProxyInput.value,
       npmHttpsProxyInput.value,
@@ -1642,27 +1609,6 @@ const saveSettings = async () => {
     showToast('保存失败: ' + (error.response?.data?.detail || error.message), 'error')
   } finally {
     savingConfig.value = false
-  }
-}
-
-const loadAppVersion = async () => {
-  try {
-    const result = await api.getAppVersion()
-    appVersion.value = result?.version || ''
-  } catch {
-    appVersion.value = ''
-  }
-}
-const checkForUpdates = async () => {
-  await loadAppVersion()
-  try {
-    const result = await api.checkUpdate(appVersion.value || '0.0.0')
-    if (result?.has_update && result.download_url && updatePreference.value === 'silent') {
-      window.open(result.download_url, '_blank')
-      showToast(t('toast.updateOpened'), 'success')
-    }
-  } catch {
-    // ignore
   }
 }
 
@@ -1719,7 +1665,7 @@ const submitFeedback = async () => {
     await api.submitFeedback({
       client_id: api.getClientId(),
       content: feedbackContent.value,
-      device_info: { ...deviceInfo.value, app_version: appVersion.value || '' },
+      device_info: { ...deviceInfo.value },
       images: feedbackImages.value
     })
     feedbackContent.value = ''
@@ -1737,7 +1683,6 @@ const refreshAll = async () => {
   await refreshTasks()
   await fetchAnnouncements()
   await loadSystemInfo()
-  await checkForUpdates()
 }
 
 const openDonation = (fromAuto) => {
@@ -1777,7 +1722,6 @@ watch(
   { deep: true }
 )
 
-watch(updatePreference, (value) => localStorage.setItem('apk_builder_update_pref', value))
 watch(sortedTasks, () => {
   if (currentTaskPage.value > totalTaskPages.value) {
     goToTaskPage(totalTaskPages.value)

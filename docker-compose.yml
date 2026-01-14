@@ -1,5 +1,3 @@
-name: convertapk
-
 services:
   backend:
     build:
@@ -12,11 +10,15 @@ services:
       - APK_BUILDER_DATA_VOLUME=convertapk-data
       - APK_BUILDER_GRADLE_CACHE_MODE=volume
       - APK_BUILDER_GRADLE_CACHE_VOLUME=convertapk-gradle-cache
+      - ADMIN_API_URL=http://admin-backend:9001
+      - ADMIN_CLIENT_TOKEN=client-secret
     volumes:
       - convertapk-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "127.0.0.1:8000:8000"
+      - "0.0.0.0:8000:8000"
+    depends_on:
+      - admin-backend
     restart: unless-stopped
 
   frontend:
@@ -27,10 +29,53 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:8080:80"
+      - "0.0.0.0:8080:80"
     restart: unless-stopped
 
-  # 仅用于构建 apk-builder 镜像（默认不启动）
+  admin-db:
+    image: postgres:15
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_DB=convertapk_admin
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - admin-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  admin-backend:
+    build:
+      context: .
+      dockerfile: admin/backend/Dockerfile
+    image: convertapk-admin-backend:latest
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=postgresql://postgres:postgres@admin-db:5432/convertapk_admin
+      - ADMIN_USER=admin
+      - ADMIN_PASS=admin123
+      - JWT_SECRET=change-me
+      - CLIENT_TOKEN=client-secret
+      - ADMIN_STORAGE_ROOT=admin-storage
+    volumes:
+      - admin-storage:/app/admin/backend/admin-storage
+    depends_on:
+      - admin-db
+    ports:
+      - "0.0.0.0:9001:9001"
+    restart: unless-stopped
+
+  admin-frontend:
+    build:
+      context: .
+      dockerfile: admin/frontend/Dockerfile
+    image: convertapk-admin-frontend:latest
+    depends_on:
+      - admin-backend
+    ports:
+      - "0.0.0.0:9002:80"
+    restart: unless-stopped
+
+  # Build apk-builder image on demand.
   apk-builder:
     profiles: ["builder"]
     build:
@@ -55,3 +100,17 @@ volumes:
       type: none
       o: bind
       device: /data/convertapk/gradle-cache
+  admin-db-data:
+    name: convertapk-admin-db
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/convertapk-admin/db
+  admin-storage:
+    name: convertapk-admin-storage
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/convertapk-admin/storage
