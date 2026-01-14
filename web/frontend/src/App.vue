@@ -44,14 +44,11 @@
             </div>
           </div>
 
-          <button class="btn btn-ghost btn-sm no-drag" @click="refreshAll">
-            <span>↻</span> {{ t('header.refresh') }}
-          </button>
           <button class="btn btn-primary btn-sm no-drag" @click="openDonation(false)">
             <span>♥</span> {{ t('donation.button') }}
           </button>
           <button class="btn btn-ghost btn-sm no-drag" @click="openSettings">
-            <span>⚙️</span> {{ t('settings.title') }}
+            <span>??</span> {{ t('settings.title') }}
           </button>
 
           <div class="window-controls no-drag" v-if="windowControlsAvailable">
