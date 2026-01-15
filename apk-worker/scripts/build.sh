@@ -134,7 +134,7 @@ log_info "=================================="
 TASK_MODE=${TASK_MODE:-convert}
 TASK_MODE="$(echo "$TASK_MODE" | tr '[:upper:]' '[:lower:]')"
 ANDROID_DIR="android"
-PROJECT_DIR="/workspace/project"
+PROJECT_DIR="${PROJECT_DIR:-/workspace/project}"
 log_info "TASK_MODE: '${TASK_MODE}'"
 
 # ============================================

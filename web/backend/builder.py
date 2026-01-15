@@ -460,6 +460,10 @@ class APKBuilder:
             cmd += task_dir_env_args
             if task_data_volume:
                 cmd += ['-e', 'NPM_CONFIG_CACHE=/data/npm-cache']
+                cmd += [
+                    "-e",
+                    f"PROJECT_DIR=/data/tasks/{task_id}/project",
+                ]
 
             # 可选：允许在后端环境中指定 Gradle 镜像列表（空格分隔）
             gradle_dist_mirrors = os.environ.get("GRADLE_DIST_MIRRORS", "").strip()
