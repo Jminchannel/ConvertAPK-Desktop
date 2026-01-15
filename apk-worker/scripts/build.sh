@@ -3,6 +3,28 @@
 
 set -e
 
+# Save build logs for debugging
+mkdir -p "${OUTPUT_DIR:-/workspace/output}"
+LOG_FILE="${OUTPUT_DIR:-/workspace/output}/build.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# On failure, copy Gradle problems report to output
+dump_debug_reports() {
+    local exit_code=$?
+    if [ "$exit_code" -eq 0 ]; then
+        return 0
+    fi
+    local debug_dir="${OUTPUT_DIR:-/workspace/output}/debug"
+    mkdir -p "$debug_dir"
+    if [ -f "$PROJECT_DIR/build/reports/problems/problems-report.html" ]; then
+        cp "$PROJECT_DIR/build/reports/problems/problems-report.html" "$debug_dir/"
+    fi
+    if [ -f "$PROJECT_DIR/app/build/reports/problems/problems-report.html" ]; then
+        cp "$PROJECT_DIR/app/build/reports/problems/problems-report.html" "$debug_dir/"
+    fi
+}
+trap dump_debug_reports EXIT
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
