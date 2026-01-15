@@ -166,14 +166,13 @@
                 @dragover.prevent="isDragging = true"
                 @dragleave.prevent="isDragging = false"
                 @drop.prevent="handleDrop"
-                @click="triggerFileInput"
               >
                 <input
                   type="file"
+                  class="file-input-overlay"
                   ref="fileInput"
                   @change="handleFileSelect"
                   accept=".zip"
-                  style="display: none"
                 />
 
                 <template v-if="!uploadedFile">
@@ -289,10 +288,10 @@
                   <div class="icon-preview" :class="{ 'has-icon': appIcon }" @click="triggerIconInput">
                     <input
                       type="file"
+                      class="file-input-overlay"
                       ref="iconInput"
                       @change="handleIconSelect"
                       accept="image/png"
-                      style="display: none"
                     />
                     <img v-if="appIcon" :src="appIcon" alt="App Icon" />
                 <div v-else class="icon-placeholder">

@@ -502,6 +502,7 @@ body {
   cursor: pointer;
   background: rgba(255, 255, 255, 0.01);
   transition: all 0.2s;
+  position: relative;
 }
 
 .upload-zone:hover, .upload-zone.dragover {
@@ -554,6 +555,14 @@ body {
   background: rgba(0,0,0,0.2);
   transition: all 0.2s;
   flex-shrink: 0;
+  position: relative;
+}
+
+.file-input-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .icon-preview:hover {
