@@ -1291,6 +1291,9 @@ ensure_gradle_wrapper_dist
 # 配置国内 Maven 镜像（降低 Maven Central 卡住的概率）
 GRADLE_INIT_SCRIPT="/tmp/gradle-mirrors.init.gradle"
 cat > "$GRADLE_INIT_SCRIPT" << 'EOF'
+settingsEvaluated {
+    it.dependencyResolutionManagement.repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+}
 allprojects {
     repositories {
         maven { url 'https://maven.aliyun.com/repository/google' }
