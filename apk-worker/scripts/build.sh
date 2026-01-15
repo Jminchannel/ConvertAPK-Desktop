@@ -196,11 +196,11 @@ if (!fs.existsSync(gradleFile)) {
 if (fs.existsSync(gradleFile)) {
   let gtext = fs.readFileSync(gradleFile, 'utf8');
   gtext = gtext.replace(/applicationId\s*=\s*"[^"]+"/, `applicationId = "${packageName}"`);
-  gtext = gtext.replace(/versionCode\s*=\s*\d+/, `versionCode = ${versionCode}`);
-  gtext = gtext.replace(/versionName\s*=\s*"[^"]+"/, `versionName = "${versionName}"`);
-  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"WEBVIEW_URL"[\s\S]*?\)/, `buildConfigField("String", "WEBVIEW_URL", "\"${webUrl}\"")`);
+  gtext = gtext.replace(/versionCode[[:space:]]*=[[:space:]]*\d+/, `versionCode = ${versionCode}`);
+  gtext = gtext.replace(/versionName[[:space:]]*=[[:space:]]*"[^"]+"/, `versionName = "${versionName}"`);
+  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"WEBVIEW_URL"[\s\S]*?\)/, `buildConfigField("String", "WEBVIEW_URL", "\\"${webUrl}\\"")`);
   gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"HIDE_STATUS_BAR"[\s\S]*?\)/, `buildConfigField("boolean", "HIDE_STATUS_BAR", "${statusBarHidden}")`);
-  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"STATUS_BAR_BACKGROUND"[\s\S]*?\)/, `buildConfigField("String", "STATUS_BAR_BACKGROUND", "\"${statusBarBackground}\"")`);
+  gtext = gtext.replace(/buildConfigField\(\s*"String"\s*,\s*"STATUS_BAR_BACKGROUND"[\s\S]*?\)/, `buildConfigField("String", "STATUS_BAR_BACKGROUND", "\\"${statusBarBackground}\\"")`);
   gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"LIGHT_STATUS_BAR_ICONS"[\s\S]*?\)/, `buildConfigField("boolean", "LIGHT_STATUS_BAR_ICONS", "${lightStatusBarIcons}")`);
   gtext = gtext.replace(/buildConfigField\(\s*"boolean"\s*,\s*"DOUBLE_CLICK_EXIT"[\s\S]*?\)/, `buildConfigField("boolean", "DOUBLE_CLICK_EXIT", "${doubleClickExit}")`);
   fs.writeFileSync(gradleFile, gtext, 'utf8');
@@ -1257,10 +1257,14 @@ if [ ! -f "$GRADLE_FILE" ]; then
     GRADLE_FILE="$ANDROID_DIR/app/build.gradle.kts"
 fi
 if [ -f "$GRADLE_FILE" ]; then
-    # 更新 versionName 和 versionCode
-    sed -i "s/versionName \".*\"/versionName \"$VERSION_NAME\"/" $GRADLE_FILE
-    sed -i "s/versionCode .*/versionCode $VERSION_CODE/" $GRADLE_FILE
-    log_info "已更新版本信息"
+    if echo "$GRADLE_FILE" | grep -q '\.kts$'; then
+        sed -i "s/versionName[[:space:]]*=[[:space:]]*\".*\"/versionName = \"$VERSION_NAME\"/" "$GRADLE_FILE"
+        sed -i "s/versionCode[[:space:]]*=[[:space:]]*[0-9]\+/versionCode = $VERSION_CODE/" "$GRADLE_FILE"
+    else
+        sed -i "s/versionName \".*\"/versionName \"$VERSION_NAME\"/" "$GRADLE_FILE"
+        sed -i "s/versionCode .*/versionCode $VERSION_CODE/" "$GRADLE_FILE"
+    fi
+    log_info "???????"
 fi
 
 log_success "Android 项目配置完成"
