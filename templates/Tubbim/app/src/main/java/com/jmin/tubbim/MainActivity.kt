@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
         webSettings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
+            javaScriptCanOpenWindowsAutomatically = true
             loadWithOverviewMode = true
             useWideViewPort = true
             builtInZoomControls = false
@@ -83,10 +84,24 @@ class MainActivity : AppCompatActivity() {
                 ): Boolean {
                     this@MainActivity.filePathCallback?.onReceiveValue(null)
                     this@MainActivity.filePathCallback = filePathCallback
-                    val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT)
-                    intent.addCategory(Intent.CATEGORY_OPENABLE)
+                    val acceptTypes = fileChooserParams?.acceptTypes
+                        ?.mapNotNull { it?.trim() }
+                        ?.filter { it.isNotEmpty() }
+                        ?: emptyList()
+                    val allowMultiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        type = if (acceptTypes.size == 1) acceptTypes[0] else "*/*"
+                        if (acceptTypes.size > 1) {
+                            putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes.toTypedArray())
+                        }
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+                    }
+                    val chooserTitle = fileChooserParams?.title ?: "????"
+                    val chooser = Intent.createChooser(intent, chooserTitle)
                     return try {
-                        fileChooserLauncher.launch(intent)
+                        fileChooserLauncher.launch(chooser)
                         true
                     } catch (e: Exception) {
                         this@MainActivity.filePathCallback = null
