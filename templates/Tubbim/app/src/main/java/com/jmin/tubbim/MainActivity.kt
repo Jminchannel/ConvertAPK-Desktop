@@ -1,5 +1,10 @@
 package com.jmin.tubbim
 
+import androidx.activity.result.contract.ActivityResultContracts
+import android.webkit.ValueCallback
+import android.net.Uri
+import android.content.Intent
+import android.app.Activity
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
@@ -21,6 +26,26 @@ import com.jmin.tubbim.utils.SystemBarsConfig
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var lastBackPressAt: Long = 0L
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = filePathCallback
+        if (callback == null) return@registerForActivityResult
+        val uris = if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val clipData = data?.clipData
+            when {
+                clipData != null -> Array(clipData.itemCount) { idx -> clipData.getItemAt(idx).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> emptyArray()
+            }
+        } else {
+            emptyArray()
+        }
+        callback.onReceiveValue(uris)
+        filePathCallback = null
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,7 +75,25 @@ class MainActivity : AppCompatActivity() {
         // 设置WebViewClient和WebChromeClient
         webView.apply {
             webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    this@MainActivity.filePathCallback?.onReceiveValue(null)
+                    this@MainActivity.filePathCallback = filePathCallback
+                    val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT)
+                    intent.addCategory(Intent.CATEGORY_OPENABLE)
+                    return try {
+                        fileChooserLauncher.launch(intent)
+                        true
+                    } catch (e: Exception) {
+                        this@MainActivity.filePathCallback = null
+                        false
+                    }
+                }
+            }
             // 加载H5游戏地址
             loadUrl(AppConfig.webViewUrl)
         }
