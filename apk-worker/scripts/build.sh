@@ -1351,14 +1351,19 @@ else
     check_error "APK 构建失败"
 
     # 找到生成的 APK
-    APK_PATH=$(find . -name "*.apk" -path "*/release/*" | head -n 1)
-
+    APK_OUT_DIR="$(pwd)/app/build/outputs/apk/release"
+    APK_PATH=$(find "$APK_OUT_DIR" -maxdepth 1 -name "*.apk" -type f 2>/dev/null | head -n 1)
     if [ -z "$APK_PATH" ]; then
-        log_error "未找到生成的APK文件"
+        APK_PATH=$(find . -name "*.apk" -path "*/release/*" -type f | head -n 1)
+    fi
+
+    if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+        log_error "??????APK??"
+        ls -la "$APK_OUT_DIR" 2>/dev/null || true
         exit 1
     fi
 
-    log_success "APK 构建完成: $APK_PATH"
+    log_success "APK ????: $APK_PATH"
 fi
 
 cd ..
