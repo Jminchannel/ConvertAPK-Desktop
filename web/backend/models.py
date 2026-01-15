@@ -107,6 +107,16 @@ class AppConfig(BaseModel):
         # fallback: keep as-is (lets advanced users pass custom references)
         return raw
 
+    @field_validator("output_format")
+    @classmethod
+    def validate_output_format(cls, value: str) -> str:
+        raw = (value or "").strip().lower()
+        if raw in {"apk", "aab"}:
+            return raw
+        if "aab" in raw or "bundle" in raw:
+            return "aab"
+        return "apk"
+
 
 class BuildTask(BaseModel):
     """构建任务"""
