@@ -45,8 +45,9 @@ export const messages = {
     web: {
       url: 'Website URL',
       urlPlaceholder: 'https://www.example.com',
-      urlHint: 'Enter the full URL (must start with http:// or https://)',
+      urlHint: 'You can omit http/https; we will auto-detect',
       validUrlError: 'Please enter a valid URL',
+      urlUnreachable: 'URL is not reachable',
       enableAds: 'Enable Topon Ads (Experimental)',
       adConfig: 'Ad Configuration',
       toponAppId: 'Topon App ID',
@@ -354,8 +355,9 @@ export const messages = {
     web: {
       url: '网页地址',
       urlPlaceholder: 'https://www.example.com',
-      urlHint: '请输入完整的网页地址（需以 http:// 或 https:// 开头）',
+      urlHint: '可不带 http/https，系统会自动补全并测试',
       validUrlError: '请输入有效的网址',
+      urlUnreachable: '网址无法访问，请检查是否可用',
       enableAds: '启用 Topon 广告（试验版）',
       adConfig: '广告配置',
       toponAppId: 'Topon App ID',
@@ -658,8 +660,9 @@ export const messages = {
     web: {
       url: '網頁位址',
       urlPlaceholder: 'https://www.example.com',
-      urlHint: '請輸入完整的網頁位址（需以 http:// 或 https:// 開頭）',
+      urlHint: '可不帶 http/https，系統會自動補全並測試',
       validUrlError: '請輸入有效的網址',
+      urlUnreachable: '網址無法訪問，請確認是否可用',
       enableAds: '啟用 Topon 廣告（試驗版）',
       adConfig: '廣告設定',
       toponAppId: 'Topon App ID',

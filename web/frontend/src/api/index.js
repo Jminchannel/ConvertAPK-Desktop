@@ -50,6 +50,11 @@ export const uploadIcon = async (file) => {
   return response.data
 }
 
+export const probeUrl = async (url) => {
+  const response = await api.post('/url-probe', { url })
+  return response.data
+}
+
 // 创建构建任务
 // taskData: { filename, icon_filename, config, reuse_keystore_from }
 export const createTask = async (taskData) => {

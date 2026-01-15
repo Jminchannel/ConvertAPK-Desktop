@@ -1033,9 +1033,17 @@ const isValidUrl = (value) => {
   }
 }
 
+const isValidWebUrl = (value) => {
+  if (!value) return false
+  const trimmed = String(value).trim()
+  if (!trimmed) return false
+  if (/^https?:\/\//i.test(trimmed)) return isValidUrl(trimmed)
+  return isValidUrl(`http://${trimmed}`)
+}
+
 const webUrlError = computed(() => {
   if (!webUrl.value) return ''
-  return isValidUrl(webUrl.value) ? '' : t('web.validUrlError')
+  return isValidWebUrl(webUrl.value) ? '' : t('web.validUrlError')
 })
 
 const packageNameError = computed(() => {
@@ -1059,6 +1067,22 @@ const canCreateTask = computed(() => {
   }
   return basicWeb
 })
+
+const resolveWebUrl = async (input) => {
+  const raw = String(input || '').trim()
+  if (!raw) return ''
+  const hasScheme = /^https?:\/\//i.test(raw)
+  const candidates = hasScheme ? [raw] : [`https://${raw}`, `http://${raw}`]
+  for (const candidate of candidates) {
+    try {
+      const result = await api.probeUrl(candidate)
+      if (result?.ok) return candidate
+    } catch (_) {
+      // ignore and try next
+    }
+  }
+  return ''
+}
 
 const getTaskTime = (task) => task.updated_at || task.created_at
 const sortedTasks = computed(() => (
@@ -1334,6 +1358,17 @@ const createTask = async () => {
   }
   isCreating.value = true
   try {
+    let normalizedWebUrl = webUrl.value
+    if (mode.value === 'web') {
+      normalizedWebUrl = await resolveWebUrl(webUrl.value)
+      if (!normalizedWebUrl) {
+        showToast(t('web.urlUnreachable'), 'error')
+        return
+      }
+      if (normalizedWebUrl !== webUrl.value) {
+        webUrl.value = normalizedWebUrl
+      }
+    }
   if (updatingTaskId.value) {
       if (compareVersion(config.value.version_name, previousVersionName.value) < 0) {
         showToast(t('toast.versionError'), 'error')
@@ -1358,7 +1393,7 @@ const createTask = async () => {
     } else {
       const taskData = {
         mode: mode.value,
-        web_url: mode.value === 'web' ? webUrl.value : null,
+        web_url: mode.value === 'web' ? normalizedWebUrl : null,
         ad_config: mode.value === 'web' && enableAds.value ? adConfig.value : null,
         filename: mode.value === 'convert' ? uploadedFile.value.filename : null,
         icon_filename: uploadedIcon.value?.filename || null,

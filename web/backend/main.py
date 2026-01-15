@@ -15,6 +15,8 @@ import json
 import shutil
 import threading
 import threading
+import urllib.request
+import urllib.error
 
 from models import (
     BuildTask, BuildTaskCreate, BuildTaskResponse, 
@@ -163,6 +165,7 @@ async def ensure_env_ready(request: Request, call_next):
             "/api/env/config",
             "/api/app/version",
             "/api/system/info",
+            "/api/url-probe",
         }
         if path.startswith("/api/adminhub"):
             return await call_next(request)
@@ -915,6 +918,31 @@ async def get_app_version():
 @app.get("/api/system/info")
 async def system_info():
     return get_system_info()
+
+
+def _probe_url(url: str, timeout: float = 5.0) -> tuple[bool, int | None, str]:
+    try:
+        request = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return True, response.getcode(), url
+    except Exception:
+        try:
+            request = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return True, response.getcode(), url
+        except Exception as exc:
+            return False, None, str(exc)
+
+
+@app.post("/api/url-probe")
+async def url_probe(payload: dict = Body(...)):
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url required")
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="url must include http/https")
+    ok, status, detail = _probe_url(url)
+    return {"ok": ok, "status": status, "detail": detail}
 
 
 @app.get("/api/adminhub/announcements")
