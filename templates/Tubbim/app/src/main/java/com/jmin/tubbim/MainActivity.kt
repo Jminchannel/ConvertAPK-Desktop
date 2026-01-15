@@ -142,58 +142,102 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-        private fun injectFilePickerPolyfill() {
+    private fun injectFilePickerPolyfill() {
         val script = """
             (function() {
               if (window.__capFilePickerPatched) return;
               window.__capFilePickerPatched = true;
+              function makeFileHandle(file) {
+                return {
+                  kind: 'file',
+                  name: file.name,
+                  getFile: function() { return Promise.resolve(file); }
+                };
+              }
+              function makeDirHandle(files) {
+                var fileHandles = (files || []).map(makeFileHandle);
+                var entries = fileHandles.map(function(h) { return [h.name, h]; });
+                return {
+                  kind: 'directory',
+                  name: 'selected',
+                  entries: function() {
+                    var i = 0;
+                    return {
+                      [Symbol.asyncIterator]: function() { return this; },
+                      next: function() {
+                        if (i < entries.length) return Promise.resolve({ value: entries[i++], done: false });
+                        return Promise.resolve({ done: true });
+                      }
+                    };
+                  },
+                  values: function() {
+                    var i = 0;
+                    return {
+                      [Symbol.asyncIterator]: function() { return this; },
+                      next: function() {
+                        if (i < fileHandles.length) return Promise.resolve({ value: fileHandles[i++], done: false });
+                        return Promise.resolve({ done: true });
+                      }
+                    };
+                  },
+                  getFileHandle: function(name) {
+                    var found = fileHandles.find(function(h) { return h.name === name; });
+                    return found ? Promise.resolve(found) : Promise.reject(new Error('Not found'));
+                  },
+                  queryPermission: function() { return Promise.resolve('granted'); },
+                  requestPermission: function() { return Promise.resolve('granted'); }
+                };
+              }
+              function pickFiles(options, directory) {
+                return new Promise(function(resolve, reject) {
+                  try {
+                    var input = document.createElement('input');
+                    input.type = 'file';
+                    input.style.display = 'none';
+                    if (directory) {
+                      input.setAttribute('webkitdirectory', '');
+                      input.setAttribute('directory', '');
+                    }
+                    if (options && options.multiple) input.multiple = true;
+                    var accept = [];
+                    if (options && Array.isArray(options.types)) {
+                      options.types.forEach(function(t) {
+                        if (t && t.accept) {
+                          Object.keys(t.accept).forEach(function(mime) {
+                            accept.push(mime);
+                            (t.accept[mime] || []).forEach(function(ext) { accept.push(ext); });
+                          });
+                        }
+                      });
+                    }
+                    if (accept.length) input.accept = accept.join(',');
+                    document.body.appendChild(input);
+                    input.addEventListener('change', function() {
+                      var files = Array.prototype.slice.call(input.files || []);
+                      document.body.removeChild(input);
+                      if (!files.length) {
+                        reject(new Error('No file selected'));
+                        return;
+                      }
+                      resolve(files);
+                    }, { once: true });
+                    input.click();
+                  } catch (e) {
+                    reject(e);
+                  }
+                });
+              }
               if (!window.showOpenFilePicker) {
                 window.showOpenFilePicker = function(options) {
-                  return new Promise(function(resolve, reject) {
-                    try {
-                      var input = document.createElement('input');
-                      input.type = 'file';
-                      input.style.display = 'none';
-                      if (options && options.multiple) {
-                        input.multiple = true;
-                      }
-                      var accept = [];
-                      if (options && Array.isArray(options.types)) {
-                        options.types.forEach(function(t) {
-                          if (t && t.accept) {
-                            Object.keys(t.accept).forEach(function(mime) {
-                              accept.push(mime);
-                              (t.accept[mime] || []).forEach(function(ext) {
-                                accept.push(ext);
-                              });
-                            });
-                          }
-                        });
-                      }
-                      if (accept.length) {
-                        input.accept = accept.join(',');
-                      }
-                      document.body.appendChild(input);
-                      input.addEventListener('change', function() {
-                        var files = Array.prototype.slice.call(input.files || []);
-                        document.body.removeChild(input);
-                        if (!files.length) {
-                          reject(new Error('No file selected'));
-                          return;
-                        }
-                        var handles = files.map(function(file) {
-                          return {
-                            kind: 'file',
-                            name: file.name,
-                            getFile: function() { return Promise.resolve(file); }
-                          };
-                        });
-                        resolve(handles);
-                      }, { once: true });
-                      input.click();
-                    } catch (e) {
-                      reject(e);
-                    }
+                  return pickFiles(options, false).then(function(files) {
+                    return files.map(makeFileHandle);
+                  });
+                };
+              }
+              if (!window.showDirectoryPicker) {
+                window.showDirectoryPicker = function(options) {
+                  return pickFiles(options, true).then(function(files) {
+                    return makeDirHandle(files);
                   });
                 };
               }

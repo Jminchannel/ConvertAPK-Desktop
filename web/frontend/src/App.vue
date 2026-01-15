@@ -285,7 +285,7 @@
               <!-- Icon -->
               <div class="icon-upload-section">
                 <div class="icon-upload">
-                  <div class="icon-preview" :class="{ 'has-icon': appIcon }" @click="triggerIconInput">
+                  <div class="icon-preview" :class="{ 'has-icon': appIcon }">
                     <input
                       type="file"
                       class="file-input-overlay"
@@ -1168,7 +1168,6 @@ const uploadFile = async (file) => {
 }
 
 // Icon cropper flow
-const triggerIconInput = () => iconInput.value?.click?.()
 const handleIconSelect = async (event) => {
   const file = event.target.files[0]
   if (!file) return
