@@ -1286,6 +1286,24 @@ fi
 
 cd "$ANDROID_DIR"
 
+# Ensure gradlew exists (web mode may miss wrapper if template copy failed)
+if [ ! -f "gradlew" ]; then
+    TEMPLATE_DIR="/workspace/templates/Tubbim"
+    if [ -f "$TEMPLATE_DIR/gradlew" ]; then
+        log_warning "gradlew missing; restoring from template"
+        cp "$TEMPLATE_DIR/gradlew" .
+        if [ -d "$TEMPLATE_DIR/gradle" ] && [ ! -d "gradle" ]; then
+            cp -R "$TEMPLATE_DIR/gradle" .
+        fi
+    fi
+fi
+if [ ! -f "gradlew" ]; then
+    log_error "gradlew not found in $ANDROID_DIR"
+    exit 1
+fi
+
+
+
 # 给 gradlew 执行权限
 chmod +x gradlew
 
