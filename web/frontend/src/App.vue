@@ -1033,12 +1033,42 @@ const isValidUrl = (value) => {
   }
 }
 
+const isValidHostName = (value) => {
+  if (!value) return false
+  const host = String(value).toLowerCase()
+  if (host === 'localhost') return true
+  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
+  if (ipv4.test(host)) return true
+  const labels = host.split('.')
+  if (labels.length < 2) return false
+  return labels.every((label, idx) => {
+    if (!label || label.length > 63) return false
+    if (!/^[a-z0-9-]+$/.test(label)) return false
+    if (label.startsWith('-') || label.endsWith('-')) return false
+    if (idx === labels.length - 1 && label.length < 2) return false
+    return true
+  })
+}
+
+const isValidPort = (value) => {
+  if (!value) return true
+  const port = Number(value)
+  return Number.isInteger(port) && port >= 1 && port <= 65535
+}
+
 const isValidWebUrl = (value) => {
   if (!value) return false
   const trimmed = String(value).trim()
   if (!trimmed) return false
-  if (/^https?:\/\//i.test(trimmed)) return isValidUrl(trimmed)
-  return isValidUrl(`http://${trimmed}`)
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+  try {
+    const url = new URL(candidate)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+    if (!isValidHostName(url.hostname)) return false
+    return isValidPort(url.port)
+  } catch {
+    return false
+  }
 }
 
 const webUrlError = computed(() => {
