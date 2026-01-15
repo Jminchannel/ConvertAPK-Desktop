@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = true
             loadWithOverviewMode = true
             useWideViewPort = true
-            supportMultipleWindows = false
+            setSupportMultipleWindows(false)
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
