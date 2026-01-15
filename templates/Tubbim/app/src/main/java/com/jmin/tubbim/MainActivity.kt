@@ -10,10 +10,16 @@ import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import android.webkit.CookieManager
+import android.graphics.Color
 import android.webkit.WebChromeClient
+import android.webkit.WebChromeClient.FileChooserParams
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.app.DownloadManager
+import android.os.Environment
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -64,6 +70,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = true
             loadWithOverviewMode = true
             useWideViewPort = true
+            supportMultipleWindows = false
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
@@ -72,10 +79,37 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = true
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(webView, true)
+        }
 
         // 设置WebViewClient和WebChromeClient
         webView.apply {
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnLongClickListener { true }
+            setOnTouchListener { _, event ->
+                event.pointerCount > 1
+            }
             webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url ?: return false
+                    val scheme = url.scheme ?: return false
+                    if (scheme == "http" || scheme == "https") {
+                        view?.loadUrl(url.toString())
+                        return true
+                    }
+                    return try {
+                        startActivity(Intent(Intent.ACTION_VIEW, url))
+                        true
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     injectFilePickerPolyfill()
@@ -103,7 +137,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
                     }
-                    val chooserTitle = fileChooserParams?.title ?: "????"
+                    val chooserTitle = fileChooserParams?.title ?: "选择文件"
                     val chooser = Intent.createChooser(intent, chooserTitle)
                     return try {
                         fileChooserLauncher.launch(chooser)
@@ -116,6 +150,20 @@ class MainActivity : AppCompatActivity() {
             }
             // 加载H5游戏地址
             loadUrl(AppConfig.webViewUrl)
+        }
+        webView.setDownloadListener { url, userAgent, _, mimeType, _ ->
+            try {
+                val request = DownloadManager.Request(Uri.parse(url))
+                request.setMimeType(mimeType)
+                request.addRequestHeader("User-Agent", userAgent)
+                request.setTitle("下载文件")
+                request.setDescription(url)
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "download")
+                val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                dm.enqueue(request)
+            } catch (_: Exception) {
+            }
         }
 
         onBackPressedDispatcher.addCallback(
