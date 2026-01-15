@@ -75,7 +75,12 @@ class MainActivity : AppCompatActivity() {
 
         // 设置WebViewClient和WebChromeClient
         webView.apply {
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    injectFilePickerPolyfill()
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 override fun onShowFileChooser(
                     webView: WebView?,
@@ -137,7 +142,67 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        private fun injectFilePickerPolyfill() {
+        val script = """
+            (function() {
+              if (window.__capFilePickerPatched) return;
+              window.__capFilePickerPatched = true;
+              if (!window.showOpenFilePicker) {
+                window.showOpenFilePicker = function(options) {
+                  return new Promise(function(resolve, reject) {
+                    try {
+                      var input = document.createElement('input');
+                      input.type = 'file';
+                      input.style.display = 'none';
+                      if (options && options.multiple) {
+                        input.multiple = true;
+                      }
+                      var accept = [];
+                      if (options && Array.isArray(options.types)) {
+                        options.types.forEach(function(t) {
+                          if (t && t.accept) {
+                            Object.keys(t.accept).forEach(function(mime) {
+                              accept.push(mime);
+                              (t.accept[mime] || []).forEach(function(ext) {
+                                accept.push(ext);
+                              });
+                            });
+                          }
+                        });
+                      }
+                      if (accept.length) {
+                        input.accept = accept.join(',');
+                      }
+                      document.body.appendChild(input);
+                      input.addEventListener('change', function() {
+                        var files = Array.prototype.slice.call(input.files || []);
+                        document.body.removeChild(input);
+                        if (!files.length) {
+                          reject(new Error('No file selected'));
+                          return;
+                        }
+                        var handles = files.map(function(file) {
+                          return {
+                            kind: 'file',
+                            name: file.name,
+                            getFile: function() { return Promise.resolve(file); }
+                          };
+                        });
+                        resolve(handles);
+                      }, { once: true });
+                      input.click();
+                    } catch (e) {
+                      reject(e);
+                    }
+                  });
+                };
+              }
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(script, null)
+    }
+
+override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             applySystemBarsConfig(AppConfig.systemBars)
