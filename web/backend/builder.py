@@ -444,6 +444,8 @@ class APKBuilder:
                 "-e",
                 f"STATUS_BAR_COLOR={env.get('STATUS_BAR_COLOR', 'transparent')}",
                 "-e",
+                f"DOUBLE_CLICK_EXIT={env.get('DOUBLE_CLICK_EXIT', 'false')}",
+                "-e",
                 f"PERMISSIONS={env.get('PERMISSIONS', '')}",
                 "-e",
                 f"KEYSTORE_PASSWORD={env['KEYSTORE_PASSWORD']}",
