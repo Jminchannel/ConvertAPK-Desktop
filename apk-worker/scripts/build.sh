@@ -858,6 +858,7 @@ import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -907,6 +908,11 @@ class MainActivity : BridgeActivity() {
 
     private fun setupWebView() {
         val webView = bridge?.webView ?: return
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            view.setPadding(nav.left, view.paddingTop, nav.right, nav.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
                 webView: WebView?,
@@ -1051,6 +1057,11 @@ if (!replacedKotlin && !(isKotlin && !allowKotlinPatch)) {
     `import android.os.Bundle${importSuffix}`,
     `import android.webkit.WebView${importSuffix}`,
   ];
+  if (!isKotlin) {
+    imports.push(`import androidx.core.view.ViewCompat${importSuffix}`);
+    imports.push(`import androidx.core.view.WindowInsetsCompat${importSuffix}`);
+    imports.push(`import androidx.core.graphics.Insets${importSuffix}`);
+  }
   if (statusBarHidden || statusBarIsWhite) {
     imports.push(`import android.os.Build${importSuffix}`);
     imports.push(`import android.view.View${importSuffix}`);
@@ -1140,6 +1151,11 @@ if (isKotlin && !replacedKotlin && allowKotlinPatch) {
     "                    startActivity(intent);\n" +
     "                } catch (Exception ignored) {\n" +
     "                }\n" +
+    "            });\n" +
+    "            ViewCompat.setOnApplyWindowInsetsListener(webView, (v, insets) -> {\n" +
+    "                Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());\n" +
+    "                v.setPadding(nav.left, v.getPaddingTop(), nav.right, nav.bottom);\n" +
+    "                return WindowInsetsCompat.CONSUMED;\n" +
     "            });\n" +
     "        }\n";
 
