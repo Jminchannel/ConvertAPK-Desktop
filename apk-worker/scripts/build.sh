@@ -883,29 +883,16 @@ class MainActivity : BridgeActivity() {
         super.onCreate(savedInstanceState)
         applySystemBars()
         setupWebView()
-        onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    val webView = bridge?.webView
-                    if (webView != null && webView.canGoBack()) {
-                        webView.goBack()
-                        return
-                    }
-                    if (!BuildConfig.DOUBLE_CLICK_EXIT) {
-                        finish()
-                        return
-                    }
-                    val now = System.currentTimeMillis()
-                    if (now - lastBackPressedAt <= 2000) {
-                        finish()
-                    } else {
-                        lastBackPressedAt = now
-                        Toast.makeText(this@MainActivity, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        if (BuildConfig.DOUBLE_CLICK_EXIT) {
+            onBackPressedDispatcher.addCallback(
+                this,
+                object : OnBackPressedCallback(true) {
+                    override fun handleOnBackPressed() {
+                        handleBackPressed()
                     }
                 }
-            }
-        )
+            )
+        }
     }
 
     private fun setupWebView() {
@@ -967,6 +954,38 @@ class MainActivity : BridgeActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             applySystemBars()
+        }
+    }
+
+    override fun onBackPressed() {
+        if (!BuildConfig.DOUBLE_CLICK_EXIT) {
+            val webView = bridge?.webView
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack()
+                return
+            }
+            super.onBackPressed()
+            return
+        }
+        handleBackPressed()
+    }
+
+    private fun handleBackPressed() {
+        val webView = bridge?.webView
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack()
+            return
+        }
+        if (!BuildConfig.DOUBLE_CLICK_EXIT) {
+            finish()
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressedAt <= 2000) {
+            finish()
+        } else {
+            lastBackPressedAt = now
+            Toast.makeText(this@MainActivity, "Press back again to exit", Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -25,7 +25,7 @@ export const messages = {
       step2: 'Export project as ZIP',
       step3: 'Upload here & Build APK',
       openAiStudio: 'Open AI Studio',
-      tips: 'Tip: Choose "Standard Web App" when exporting'
+      tips: 'Tip: when exporting. If your app uses camera, import/export (download), tell Gemini: "this feature needs Capacitor adaptation".'
     },
     // Steps
     steps: {
@@ -335,7 +335,7 @@ export const messages = {
       step2: '导出项目为 ZIP 包',
       step3: '在此处上传并构建 APK',
       openAiStudio: '打开 AI Studio',
-      tips: '提示：导出时请选择 "Standard Web App"'
+      tips: '提示：如果应用中包含相机、导入/导出（下载）等功能，请在 Google AI Studio 提示 Gemini：“相机、导入/导出（下载）等功能需要做 Capacitor 适配”。'
     },
     // Steps
     steps: {
@@ -640,7 +640,7 @@ export const messages = {
       step2: '匯出專案為 ZIP 檔',
       step3: '在此處上傳並建構 APK',
       openAiStudio: '開啟 AI Studio',
-      tips: '提示：匯出時請選擇 "Standard Web App"'
+      tips: '提示：如應用包含相機、匯入/匯出（下載）等功能，請在 Google AI Studio 提示 Gemini：「該功能需要做 Capacitor 適配」。'
     },
     // Steps
     steps: {
