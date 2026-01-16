@@ -858,6 +858,7 @@ import com.getcapacitor.BridgeActivity
 
 class MainActivity : BridgeActivity() {
     private var lastBackPressedAt: Long = 0L
+    private val doubleClickExitEnabled = ${doubleClickExit ? "true" : "false"}
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -883,7 +884,7 @@ class MainActivity : BridgeActivity() {
         super.onCreate(savedInstanceState)
         applySystemBars()
         setupWebView()
-        if (BuildConfig.DOUBLE_CLICK_EXIT) {
+        if (doubleClickExitEnabled) {
             onBackPressedDispatcher.addCallback(
                 this,
                 object : OnBackPressedCallback(true) {
@@ -958,7 +959,7 @@ class MainActivity : BridgeActivity() {
     }
 
     override fun onBackPressed() {
-        if (!BuildConfig.DOUBLE_CLICK_EXIT) {
+        if (!doubleClickExitEnabled) {
             val webView = bridge?.webView
             if (webView != null && webView.canGoBack()) {
                 webView.goBack()
