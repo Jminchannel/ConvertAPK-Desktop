@@ -908,10 +908,19 @@ class MainActivity : BridgeActivity() {
 
     private fun setupWebView() {
         val webView = bridge?.webView ?: return
+        webView.clipToPadding = false
         val root = window.decorView
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
             webView.setPadding(nav.left, webView.paddingTop, nav.right, nav.bottom)
+            webView.post {
+                val script = "(function(){var b=" + nav.bottom +
+                    ";var root=document.documentElement;" +
+                    "root.style.boxSizing='border-box';root.style.paddingBottom=b+'px';" +
+                    "if(document.body){document.body.style.boxSizing='border-box';document.body.style.paddingBottom=b+'px';}" +
+                    "})();"
+                webView.evaluateJavascript(script, null)
+            }
             insets
         }
         ViewCompat.requestApplyInsets(root)
@@ -1154,10 +1163,17 @@ if (isKotlin && !replacedKotlin && allowKotlinPatch) {
     "                } catch (Exception ignored) {\n" +
     "                }\n" +
     "            });\n" +
+    "            webView.setClipToPadding(false);\n" +
     "            View decor = getWindow().getDecorView();\n" +
     "            ViewCompat.setOnApplyWindowInsetsListener(decor, (v, insets) -> {\n" +
     "                Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());\n" +
     "                webView.setPadding(nav.left, webView.getPaddingTop(), nav.right, nav.bottom);\n" +
+    "                webView.post(() -> webView.evaluateJavascript(\n" +
+    "                    \"(function(){var b=\" + nav.bottom + \";\" +\n" +
+    "                    \"var root=document.documentElement;\" +\n" +
+    "                    \"root.style.boxSizing='border-box';root.style.paddingBottom=b+'px';\" +\n" +
+    "                    \"if(document.body){document.body.style.boxSizing='border-box';document.body.style.paddingBottom=b+'px';}\" +\n" +
+    "                    \"})();\", null));\n" +
     "                return insets;\n" +
     "            });\n" +
     "            ViewCompat.requestApplyInsets(decor);\n" +
