@@ -824,6 +824,8 @@ let text = readText(mainActivity);
 const originalText = text;
 const isKotlin = mainActivity.endsWith(".kt");
 const packageNameRaw = String(process.env.PACKAGE_NAME || "").trim();
+const doubleClickExit =
+  String(process.env.DOUBLE_CLICK_EXIT || "").trim().toLowerCase() === "true";
 const packageLineMatch = text.match(/^package\s+[^\s]+/m);
 const packageLine = packageNameRaw
   ? `package ${packageNameRaw}`
@@ -977,7 +979,7 @@ class MainActivity : BridgeActivity() {
             webView.goBack()
             return
         }
-        if (!BuildConfig.DOUBLE_CLICK_EXIT) {
+        if (!doubleClickExitEnabled) {
             finish()
             return
         }
@@ -1027,8 +1029,6 @@ class MainActivity : BridgeActivity() {
 
 const statusBarHidden =
   String(process.env.STATUS_BAR_HIDDEN || "").trim().toLowerCase() === "true";
-const doubleClickExit =
-  String(process.env.DOUBLE_CLICK_EXIT || "").trim().toLowerCase() === "true";
 const statusBarColorRaw = String(process.env.STATUS_BAR_COLOR || "transparent").trim();
 const statusBarColorLower = statusBarColorRaw.toLowerCase();
 const statusBarIsWhite =
