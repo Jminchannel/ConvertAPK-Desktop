@@ -797,7 +797,10 @@ function findMainActivity(javaRoot) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         stack.push(full);
-      } else if (entry.isFile() && entry.name === "MainActivity.java") {
+      } else if (
+        entry.isFile() &&
+        (entry.name === "MainActivity.java" || entry.name === "MainActivity.kt")
+      ) {
         return full;
       }
     }
@@ -819,6 +822,188 @@ if (!mainActivity) {
 
 let text = readText(mainActivity);
 const originalText = text;
+const isKotlin = mainActivity.endsWith(".kt");
+const packageNameRaw = String(process.env.PACKAGE_NAME || "").trim();
+const packageLineMatch = text.match(/^package\s+[^\s]+/m);
+const packageLine = packageNameRaw
+  ? `package ${packageNameRaw}`
+  : (packageLineMatch ? packageLineMatch[0] : "package com.example.app");
+let replacedKotlin = false;
+
+if (isKotlin && !text.includes("ConvertAPK: enhanced main")) {
+  text = `${packageLine}
+
+// ConvertAPK: enhanced main
+import android.app.Activity
+import android.app.DownloadManager
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.os.Environment
+import android.webkit.CookieManager
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebChromeClient.FileChooserParams
+import android.webkit.WebView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.view.View
+import android.view.WindowManager
+import com.getcapacitor.BridgeActivity
+
+class MainActivity : BridgeActivity() {
+    private var lastBackPressedAt: Long = 0L
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = filePathCallback
+        if (callback == null) return@registerForActivityResult
+        val uris = if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val clipData = data?.clipData
+            when {
+                clipData != null -> Array(clipData.itemCount) { idx -> clipData.getItemAt(idx).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> emptyArray()
+            }
+        } else {
+            emptyArray()
+        }
+        callback.onReceiveValue(uris)
+        filePathCallback = null
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        applySystemBars()
+        setupWebView()
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    val webView = bridge?.webView
+                    if (webView != null && webView.canGoBack()) {
+                        webView.goBack()
+                        return
+                    }
+                    if (!BuildConfig.DOUBLE_CLICK_EXIT) {
+                        finish()
+                        return
+                    }
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressedAt <= 2000) {
+                        finish()
+                    } else {
+                        lastBackPressedAt = now
+                        Toast.makeText(this@MainActivity, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    private fun setupWebView() {
+        val webView = bridge?.webView ?: return
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
+                this@MainActivity.filePathCallback = filePathCallback
+                val intent = try {
+                    fileChooserParams?.createIntent()
+                } catch (_: Exception) {
+                    null
+                }
+                val fallback = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    type = "*/*"
+                    val allowMultiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+                }
+                val chooserTitle = fileChooserParams?.title ?: "Select file"
+                val chooser = Intent.createChooser(intent ?: fallback, chooserTitle)
+                return try {
+                    fileChooserLauncher.launch(chooser)
+                    true
+                } catch (_: Exception) {
+                    this@MainActivity.filePathCallback = null
+                    false
+                }
+            }
+        }
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            try {
+                val request = DownloadManager.Request(Uri.parse(url))
+                request.setMimeType(mimeType)
+                request.addRequestHeader("User-Agent", userAgent)
+                val cookie = CookieManager.getInstance().getCookie(url)
+                if (cookie != null) {
+                    request.addRequestHeader("cookie", cookie)
+                }
+                val filename = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                request.setTitle(filename)
+                request.setDescription(url)
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                dm.enqueue(request)
+            } catch (_: Exception) {
+                Toast.makeText(this, "Download failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applySystemBars()
+        }
+    }
+
+    private fun applySystemBars() {
+        val statusBarBackground = BuildConfig.STATUS_BAR_BACKGROUND.trim().lowercase()
+        val drawBehind = statusBarBackground == "transparent"
+        WindowCompat.setDecorFitsSystemWindows(window, !drawBehind)
+        @Suppress("DEPRECATION")
+        window.statusBarColor = if (drawBehind) android.graphics.Color.TRANSPARENT else android.graphics.Color.WHITE
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.isAppearanceLightStatusBars = BuildConfig.LIGHT_STATUS_BAR_ICONS
+        if (BuildConfig.HIDE_STATUS_BAR) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            window.addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                if (BuildConfig.LIGHT_STATUS_BAR_ICONS) {
+                    View.SYSTEM_UI_FLAG_VISIBLE or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                } else {
+                    View.SYSTEM_UI_FLAG_VISIBLE
+                }
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
+    }
+}
+`;
+  replacedKotlin = true;
+}
 
 const statusBarHidden =
   String(process.env.STATUS_BAR_HIDDEN || "").trim().toLowerCase() === "true";
@@ -831,109 +1016,162 @@ const statusBarIsWhite =
   statusBarColorLower === "#ffffff" ||
   statusBarColorLower === "#ffffffff";
 
-const imports = [
-  "import android.content.Intent;",
-  "import android.net.Uri;",
-  "import android.os.Bundle;",
-  "import android.webkit.WebView;",
-];
-if (statusBarHidden || statusBarIsWhite) {
-  imports.push("import android.os.Build;");
-  imports.push("import android.view.View;");
-  imports.push("import android.view.WindowInsets;");
-}
-if (doubleClickExit) {
-  imports.push("import android.widget.Toast;");
-  imports.push("import androidx.activity.OnBackPressedCallback;");
-}
-
-const lines = text.split(/\r?\n/);
-let insertAt = 1;
-for (let i = 0; i < lines.length; i++) {
-  if (lines[i].startsWith("import ")) {
-    insertAt = i + 1;
+if (!replacedKotlin) {
+  const importSuffix = isKotlin ? "" : ";";
+  const imports = [
+    `import android.content.Intent${importSuffix}`,
+    `import android.net.Uri${importSuffix}`,
+    `import android.os.Bundle${importSuffix}`,
+    `import android.webkit.WebView${importSuffix}`,
+  ];
+  if (statusBarHidden || statusBarIsWhite) {
+    imports.push(`import android.os.Build${importSuffix}`);
+    imports.push(`import android.view.View${importSuffix}`);
+    imports.push(`import android.view.WindowInsets${importSuffix}`);
   }
-}
-for (const imp of imports) {
-  if (!lines.includes(imp)) {
-    lines.splice(insertAt, 0, imp);
-    insertAt++;
+  if (doubleClickExit) {
+    imports.push(`import android.widget.Toast${importSuffix}`);
+    imports.push(`import androidx.activity.OnBackPressedCallback${importSuffix}`);
   }
+
+  const lines = text.split(/\r?\n/);
+  let insertAt = 1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith("import ")) {
+      insertAt = i + 1;
+    }
+  }
+  for (const imp of imports) {
+    if (!lines.includes(imp)) {
+      lines.splice(insertAt, 0, imp);
+      insertAt++;
+    }
+  }
+  text = lines.join("\n");
 }
-text = lines.join("\n");
 
-const hasDownloadListener = text.includes("setDownloadListener");
-const snippet = hasDownloadListener
-  ? ""
-  :
-  "        WebView webView = getBridge().getWebView();\n" +
-  "        if (webView != null) {\n" +
-  "            webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {\n" +
-  "                try {\n" +
-  "                    Intent intent = new Intent(Intent.ACTION_VIEW);\n" +
-  "                    intent.setData(Uri.parse(url));\n" +
-  "                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\n" +
-  "                    startActivity(intent);\n" +
-  "                } catch (Exception ignored) {\n" +
-  "                }\n" +
-  "            });\n" +
-  "        }\n";
+if (isKotlin && !replacedKotlin) {
+  const hasBackPress = text.includes("ConvertAPK: back-press dispatcher");
+  const backPressSnippet = doubleClickExit && !hasBackPress
+    ? "        // ConvertAPK: back-press dispatcher\n" +
+      "        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {\n" +
+      "            override fun handleOnBackPressed() {\n" +
+      "                val webView = bridge?.webView\n" +
+      "                if (webView != null && webView.canGoBack()) {\n" +
+      "                    webView.goBack()\n" +
+      "                    return\n" +
+      "                }\n" +
+      "                val now = System.currentTimeMillis()\n" +
+      "                if (now - lastBackPressedAt < 2000) {\n" +
+      "                    finish()\n" +
+      "                } else {\n" +
+      "                    lastBackPressedAt = now\n" +
+      "                    Toast.makeText(this@MainActivity, \"Press back again to exit\", Toast.LENGTH_SHORT).show()\n" +
+      "                }\n" +
+      "            }\n" +
+      "        })\n"
+    : "";
 
-const hasStatusSnippet = text.includes("ConvertAPK: status bar");
-const statusSnippet = !hasStatusSnippet
-  ? statusBarHidden
-    ? "        // ConvertAPK: status bar\n" +
-      "        applyStatusBarHidden();\n"
-    : statusBarIsWhite
-      ? "        // ConvertAPK: status bar\n" +
-        "        applyStatusBarVisibleWhite();\n"
-      : ""
-  : "";
+  const hasBackPressField = originalText.includes("lastBackPressedAt");
+  if (doubleClickExit && !originalText.includes("ConvertAPK: back-press state") && !hasBackPressField) {
+    const result = insertAfterClassOpen(
+      text,
+      "    // ConvertAPK: back-press state\n" +
+        "    private var lastBackPressedAt: Long = 0L\n"
+    );
+    text = result.text;
+  }
 
-const backPressSnippet = doubleClickExit && !text.includes("ConvertAPK: back-press dispatcher")
-  ? "        // ConvertAPK: back-press dispatcher\n" +
-    "        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {\n" +
-    "            @Override\n" +
-    "            public void handleOnBackPressed() {\n" +
-    "                android.webkit.WebView webView = getBridge() != null ? getBridge().getWebView() : null;\n" +
-    "                if (webView != null && webView.canGoBack()) {\n" +
-    "                    webView.goBack();\n" +
-    "                    return;\n" +
-    "                }\n" +
-    "                long now = System.currentTimeMillis();\n" +
-    "                if (now - lastBackPressedAt < 2000) {\n" +
-    "                    finish();\n" +
-    "                } else {\n" +
-    "                    lastBackPressedAt = now;\n" +
-    "                    Toast.makeText(MainActivity.this, \"Press back again to exit\", Toast.LENGTH_SHORT).show();\n" +
-    "                }\n" +
-    "            }\n" +
-    "        });\n"
-  : "";
-
-if (text.includes("protected void onCreate(Bundle savedInstanceState)")) {
-  const marker = "super.onCreate(savedInstanceState);";
-  if (text.includes(marker)) {
-    const injected = snippet.trimEnd() +
-      (statusSnippet ? "\n" + statusSnippet.trimEnd() : "") +
-      (backPressSnippet ? "\n" + backPressSnippet.trimEnd() : "");
-    if (injected.trim().length) {
-      text = text.replace(marker, marker + "\n" + injected);
+  if (text.includes("override fun onCreate(")) {
+    const marker = "super.onCreate(savedInstanceState)";
+    if (text.includes(marker) && backPressSnippet.trim().length) {
+      text = text.replace(marker, marker + "\n" + backPressSnippet.trimEnd());
+    }
+  } else if (backPressSnippet.trim().length) {
+    const insert =
+      "    override fun onCreate(savedInstanceState: Bundle?) {\n" +
+      "        super.onCreate(savedInstanceState)\n" +
+      backPressSnippet +
+      "    }\n\n";
+    const idx = text.lastIndexOf("}");
+    if (idx !== -1) {
+      text = text.slice(0, idx) + insert + text.slice(idx);
     }
   }
 } else {
-  const insert =
-    "    @Override\n" +
-    "    protected void onCreate(Bundle savedInstanceState) {\n" +
-    "        super.onCreate(savedInstanceState);\n" +
-    snippet +
-    statusSnippet +
-    backPressSnippet +
-    "    }\n\n";
-  const idx = text.lastIndexOf("}");
-  if (idx !== -1) {
-    if ((snippet + statusSnippet).trim().length) {
-      text = text.slice(0, idx) + insert + text.slice(idx);
+  const hasDownloadListener = text.includes("setDownloadListener");
+  const snippet = hasDownloadListener
+    ? ""
+    :
+    "        WebView webView = getBridge().getWebView();\n" +
+    "        if (webView != null) {\n" +
+    "            webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {\n" +
+    "                try {\n" +
+    "                    Intent intent = new Intent(Intent.ACTION_VIEW);\n" +
+    "                    intent.setData(Uri.parse(url));\n" +
+    "                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);\n" +
+    "                    startActivity(intent);\n" +
+    "                } catch (Exception ignored) {\n" +
+    "                }\n" +
+    "            });\n" +
+    "        }\n";
+
+  const hasStatusSnippet = text.includes("ConvertAPK: status bar");
+  const statusSnippet = !hasStatusSnippet
+    ? statusBarHidden
+      ? "        // ConvertAPK: status bar\n" +
+        "        applyStatusBarHidden();\n"
+      : statusBarIsWhite
+        ? "        // ConvertAPK: status bar\n" +
+          "        applyStatusBarVisibleWhite();\n"
+        : ""
+    : "";
+
+  const backPressSnippet = doubleClickExit && !text.includes("ConvertAPK: back-press dispatcher")
+    ? "        // ConvertAPK: back-press dispatcher\n" +
+      "        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {\n" +
+      "            @Override\n" +
+      "            public void handleOnBackPressed() {\n" +
+      "                android.webkit.WebView webView = getBridge() != null ? getBridge().getWebView() : null;\n" +
+      "                if (webView != null && webView.canGoBack()) {\n" +
+      "                    webView.goBack();\n" +
+      "                    return;\n" +
+      "                }\n" +
+      "                long now = System.currentTimeMillis();\n" +
+      "                if (now - lastBackPressedAt < 2000) {\n" +
+      "                    finish();\n" +
+      "                } else {\n" +
+      "                    lastBackPressedAt = now;\n" +
+      "                    Toast.makeText(MainActivity.this, \"Press back again to exit\", Toast.LENGTH_SHORT).show();\n" +
+      "                }\n" +
+      "            }\n" +
+      "        });\n"
+    : "";
+
+  if (text.includes("protected void onCreate(Bundle savedInstanceState)")) {
+    const marker = "super.onCreate(savedInstanceState);";
+    if (text.includes(marker)) {
+      const injected = snippet.trimEnd() +
+        (statusSnippet ? "\n" + statusSnippet.trimEnd() : "") +
+        (backPressSnippet ? "\n" + backPressSnippet.trimEnd() : "");
+      if (injected.trim().length) {
+        text = text.replace(marker, marker + "\n" + injected);
+      }
+    }
+  } else {
+    const insert =
+      "    @Override\n" +
+      "    protected void onCreate(Bundle savedInstanceState) {\n" +
+      "        super.onCreate(savedInstanceState);\n" +
+      snippet +
+      statusSnippet +
+      backPressSnippet +
+      "    }\n\n";
+    const idx = text.lastIndexOf("}");
+    if (idx !== -1) {
+      if ((snippet + statusSnippet).trim().length) {
+        text = text.slice(0, idx) + insert + text.slice(idx);
+      }
     }
   }
 }
@@ -952,119 +1190,121 @@ function insertAfterClassOpen(src, insert) {
   return { text: src, inserted: false };
 }
 
-let hasBackPressField = originalText.includes("lastBackPressedAt");
-if (doubleClickExit && !originalText.includes("ConvertAPK: back-press state") && !hasBackPressField) {
-  const result = insertAfterClassOpen(
-    text,
-    "    // ConvertAPK: back-press state\n" +
-      "    private long lastBackPressedAt = 0L;\n"
-  );
-  text = result.text;
-  if (result.inserted) {
-    hasBackPressField = true;
+if (!isKotlin) {
+  let hasBackPressField = originalText.includes("lastBackPressedAt");
+  if (doubleClickExit && !originalText.includes("ConvertAPK: back-press state") && !hasBackPressField) {
+    const result = insertAfterClassOpen(
+      text,
+      "    // ConvertAPK: back-press state\n" +
+        "    private long lastBackPressedAt = 0L;\n"
+    );
+    text = result.text;
+    if (result.inserted) {
+      hasBackPressField = true;
+    }
   }
-}
 
-if (statusBarHidden && !originalText.includes("ConvertAPK: status bar helper")) {
-  const helper = 
-    "    // ConvertAPK: status bar helper\n" +
-    "    private void applyStatusBarHidden() {\n" +
-    "        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {\n" +
-    "            getWindow().setDecorFitsSystemWindows(false);\n" +
-    "            android.view.WindowInsetsController controller = getWindow().getInsetsController();\n" +
-    "            if (controller != null) {\n" +
-    "                controller.hide(android.view.WindowInsets.Type.statusBars());\n" +
-    "                controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);\n" +
-    "            }\n" +
-    "        } else {\n" +
-    "            android.view.View decorView = getWindow().getDecorView();\n" +
-    "            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN\n" +
-    "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN\n" +
-    "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE\n" +
-    "                | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;\n" +
-    "            decorView.setSystemUiVisibility(flags);\n" +
-    "        }\n" +
-    "    }\n";
-  const result = insertAfterClassOpen(text, helper);
-  text = result.text;
-}
-
-if (!statusBarHidden && statusBarIsWhite && !originalText.includes("ConvertAPK: status bar white")) {
-  const helper =
-    "    // ConvertAPK: status bar white\n" +
-    "    private void applyStatusBarVisibleWhite() {\n" +
-    "        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {\n" +
-    "            getWindow().setDecorFitsSystemWindows(true);\n" +
-    "            android.view.WindowInsetsController controller = getWindow().getInsetsController();\n" +
-    "            if (controller != null) {\n" +
-    "                controller.setSystemBarsAppearance(android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,\n" +
-    "                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);\n" +
-    "            }\n" +
-    "        } else {\n" +
-    "            android.view.View decorView = getWindow().getDecorView();\n" +
-    "            int flags = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR\n" +
-    "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;\n" +
-    "            decorView.setSystemUiVisibility(flags);\n" +
-    "        }\n" +
-    "        getWindow().setStatusBarColor(android.graphics.Color.parseColor(\"#FFFFFF\"));\n" +
-    "    }\n";
-  const result = insertAfterClassOpen(text, helper);
-  text = result.text;
-}
-
-if (statusBarHidden && !text.includes("ConvertAPK: status bar focus")) {
-  const focusHandler =
-    "    // ConvertAPK: status bar focus\n" +
-    "    @Override\n" +
-    "    public void onWindowFocusChanged(boolean hasFocus) {\n" +
-    "        super.onWindowFocusChanged(hasFocus);\n" +
-    "        if (hasFocus) {\n" +
-    "            applyStatusBarHidden();\n" +
-    "        }\n" +
-    "    }\n\n";
-  const idx = text.lastIndexOf("}");
-  if (idx !== -1) {
-    text = text.slice(0, idx) + focusHandler + text.slice(idx);
+  if (statusBarHidden && !originalText.includes("ConvertAPK: status bar helper")) {
+    const helper = 
+      "    // ConvertAPK: status bar helper\n" +
+      "    private void applyStatusBarHidden() {\n" +
+      "        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {\n" +
+      "            getWindow().setDecorFitsSystemWindows(false);\n" +
+      "            android.view.WindowInsetsController controller = getWindow().getInsetsController();\n" +
+      "            if (controller != null) {\n" +
+      "                controller.hide(android.view.WindowInsets.Type.statusBars());\n" +
+      "                controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);\n" +
+      "            }\n" +
+      "        } else {\n" +
+      "            android.view.View decorView = getWindow().getDecorView();\n" +
+      "            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN\n" +
+      "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN\n" +
+      "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE\n" +
+      "                | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;\n" +
+      "            decorView.setSystemUiVisibility(flags);\n" +
+      "        }\n" +
+      "    }\n";
+    const result = insertAfterClassOpen(text, helper);
+    text = result.text;
   }
-}
 
-if (!statusBarHidden && statusBarIsWhite && !text.includes("ConvertAPK: status bar focus white")) {
-  const focusHandler =
-    "    // ConvertAPK: status bar focus white\n" +
-    "    @Override\n" +
-    "    public void onWindowFocusChanged(boolean hasFocus) {\n" +
-    "        super.onWindowFocusChanged(hasFocus);\n" +
-    "        if (hasFocus) {\n" +
-    "            applyStatusBarVisibleWhite();\n" +
-    "        }\n" +
-    "    }\n\n";
-  const idx = text.lastIndexOf("}");
-  if (idx !== -1) {
-    text = text.slice(0, idx) + focusHandler + text.slice(idx);
+  if (!statusBarHidden && statusBarIsWhite && !originalText.includes("ConvertAPK: status bar white")) {
+    const helper =
+      "    // ConvertAPK: status bar white\n" +
+      "    private void applyStatusBarVisibleWhite() {\n" +
+      "        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {\n" +
+      "            getWindow().setDecorFitsSystemWindows(true);\n" +
+      "            android.view.WindowInsetsController controller = getWindow().getInsetsController();\n" +
+      "            if (controller != null) {\n" +
+      "                controller.setSystemBarsAppearance(android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,\n" +
+      "                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);\n" +
+      "            }\n" +
+      "        } else {\n" +
+      "            android.view.View decorView = getWindow().getDecorView();\n" +
+      "            int flags = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR\n" +
+      "                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;\n" +
+      "            decorView.setSystemUiVisibility(flags);\n" +
+      "        }\n" +
+      "        getWindow().setStatusBarColor(android.graphics.Color.parseColor(\"#FFFFFF\"));\n" +
+      "    }\n";
+    const result = insertAfterClassOpen(text, helper);
+    text = result.text;
   }
-}
 
-if (doubleClickExit && hasBackPressField && !text.includes("ConvertAPK: double-click-exit")) {
-  const onBackPressed =
-    "    // ConvertAPK: double-click-exit\n" +
-    "    @Override\n" +
-    "    public void onBackPressed() {\n" +
-    "        android.webkit.WebView webView = getBridge() != null ? getBridge().getWebView() : null;\n" +
-    "        if (webView != null && webView.canGoBack()) {\n" +
-    "            webView.goBack();\n" +
-    "            return;\n" +
-    "        }\n" +
-    "        long now = System.currentTimeMillis();\n" +
-    "        if (now - lastBackPressedAt < 2000) {\n" +
-    "            super.onBackPressed();\n" +
-    "        } else {\n" +
-    "            lastBackPressedAt = now;\n" +
-    "            Toast.makeText(this, \"Press back again to exit\", Toast.LENGTH_SHORT).show();\n" +
-    "        }\n" +
-    "    }\n\n";
-  const idx = text.lastIndexOf("}");
-  if (idx !== -1) {
-    text = text.slice(0, idx) + onBackPressed + text.slice(idx);
+  if (statusBarHidden && !text.includes("ConvertAPK: status bar focus")) {
+    const focusHandler =
+      "    // ConvertAPK: status bar focus\n" +
+      "    @Override\n" +
+      "    public void onWindowFocusChanged(boolean hasFocus) {\n" +
+      "        super.onWindowFocusChanged(hasFocus);\n" +
+      "        if (hasFocus) {\n" +
+      "            applyStatusBarHidden();\n" +
+      "        }\n" +
+      "    }\n\n";
+    const idx = text.lastIndexOf("}");
+    if (idx !== -1) {
+      text = text.slice(0, idx) + focusHandler + text.slice(idx);
+    }
+  }
+
+  if (!statusBarHidden && statusBarIsWhite && !text.includes("ConvertAPK: status bar focus white")) {
+    const focusHandler =
+      "    // ConvertAPK: status bar focus white\n" +
+      "    @Override\n" +
+      "    public void onWindowFocusChanged(boolean hasFocus) {\n" +
+      "        super.onWindowFocusChanged(hasFocus);\n" +
+      "        if (hasFocus) {\n" +
+      "            applyStatusBarVisibleWhite();\n" +
+      "        }\n" +
+      "    }\n\n";
+    const idx = text.lastIndexOf("}");
+    if (idx !== -1) {
+      text = text.slice(0, idx) + focusHandler + text.slice(idx);
+    }
+  }
+
+  if (doubleClickExit && hasBackPressField && !text.includes("ConvertAPK: double-click-exit")) {
+    const onBackPressed =
+      "    // ConvertAPK: double-click-exit\n" +
+      "    @Override\n" +
+      "    public void onBackPressed() {\n" +
+      "        android.webkit.WebView webView = getBridge() != null ? getBridge().getWebView() : null;\n" +
+      "        if (webView != null && webView.canGoBack()) {\n" +
+      "            webView.goBack();\n" +
+      "            return;\n" +
+      "        }\n" +
+      "        long now = System.currentTimeMillis();\n" +
+      "        if (now - lastBackPressedAt < 2000) {\n" +
+      "            super.onBackPressed();\n" +
+      "        } else {\n" +
+      "            lastBackPressedAt = now;\n" +
+      "            Toast.makeText(this, \"Press back again to exit\", Toast.LENGTH_SHORT).show();\n" +
+      "        }\n" +
+      "    }\n\n";
+    const idx = text.lastIndexOf("}");
+    if (idx !== -1) {
+      text = text.slice(0, idx) + onBackPressed + text.slice(idx);
+    }
   }
 }
 
