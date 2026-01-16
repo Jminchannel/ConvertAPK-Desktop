@@ -826,13 +826,20 @@ const isKotlin = mainActivity.endsWith(".kt");
 const packageNameRaw = String(process.env.PACKAGE_NAME || "").trim();
 const doubleClickExit =
   String(process.env.DOUBLE_CLICK_EXIT || "").trim().toLowerCase() === "true";
+const taskMode = String(process.env.TASK_MODE || "").trim().toLowerCase();
+const allowKotlinPatch = taskMode !== "web";
 const packageLineMatch = text.match(/^package\s+[^\s]+/m);
 const packageLine = packageNameRaw
   ? `package ${packageNameRaw}`
   : (packageLineMatch ? packageLineMatch[0] : "package com.example.app");
 let replacedKotlin = false;
 
-if (isKotlin && !text.includes("ConvertAPK: enhanced main")) {
+if (
+  isKotlin &&
+  allowKotlinPatch &&
+  text.includes("BridgeActivity") &&
+  !text.includes("ConvertAPK: enhanced main")
+) {
   text = `${packageLine}
 
 // ConvertAPK: enhanced main
@@ -1036,7 +1043,7 @@ const statusBarIsWhite =
   statusBarColorLower === "#ffffff" ||
   statusBarColorLower === "#ffffffff";
 
-if (!replacedKotlin) {
+if (!replacedKotlin && !(isKotlin && !allowKotlinPatch)) {
   const importSuffix = isKotlin ? "" : ";";
   const imports = [
     `import android.content.Intent${importSuffix}`,
@@ -1070,7 +1077,7 @@ if (!replacedKotlin) {
   text = lines.join("\n");
 }
 
-if (isKotlin && !replacedKotlin) {
+if (isKotlin && !replacedKotlin && allowKotlinPatch) {
   const hasBackPress = text.includes("ConvertAPK: back-press dispatcher");
   const backPressSnippet = doubleClickExit && !hasBackPress
     ? "        // ConvertAPK: back-press dispatcher\n" +
