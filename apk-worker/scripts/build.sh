@@ -908,11 +908,13 @@ class MainActivity : BridgeActivity() {
 
     private fun setupWebView() {
         val webView = bridge?.webView ?: return
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+        val root = window.decorView
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            view.setPadding(nav.left, view.paddingTop, nav.right, nav.bottom)
-            WindowInsetsCompat.CONSUMED
+            webView.setPadding(nav.left, webView.paddingTop, nav.right, nav.bottom)
+            insets
         }
+        ViewCompat.requestApplyInsets(root)
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
                 webView: WebView?,
@@ -1152,11 +1154,13 @@ if (isKotlin && !replacedKotlin && allowKotlinPatch) {
     "                } catch (Exception ignored) {\n" +
     "                }\n" +
     "            });\n" +
-    "            ViewCompat.setOnApplyWindowInsetsListener(webView, (v, insets) -> {\n" +
+    "            View decor = getWindow().getDecorView();\n" +
+    "            ViewCompat.setOnApplyWindowInsetsListener(decor, (v, insets) -> {\n" +
     "                Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());\n" +
-    "                v.setPadding(nav.left, v.getPaddingTop(), nav.right, nav.bottom);\n" +
-    "                return WindowInsetsCompat.CONSUMED;\n" +
+    "                webView.setPadding(nav.left, webView.getPaddingTop(), nav.right, nav.bottom);\n" +
+    "                return insets;\n" +
     "            });\n" +
+    "            ViewCompat.requestApplyInsets(decor);\n" +
     "        }\n";
 
   const hasStatusSnippet = text.includes("ConvertAPK: status bar");
