@@ -1148,7 +1148,9 @@ if (isKotlin && !replacedKotlin && allowKotlinPatch) {
       text = text.slice(0, idx) + insert + text.slice(idx);
     }
   }
-} else {
+}
+
+if (!isKotlin) {
   const hasDownloadListener = text.includes("setDownloadListener");
   const snippet = hasDownloadListener
     ? ""
