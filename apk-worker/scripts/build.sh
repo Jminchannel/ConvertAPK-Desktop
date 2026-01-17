@@ -1069,6 +1069,7 @@ if (!replacedKotlin && !(isKotlin && !allowKotlinPatch)) {
     `import android.webkit.WebView${importSuffix}`,
   ];
   if (!isKotlin) {
+    imports.push(`import android.view.View${importSuffix}`);
     imports.push(`import androidx.core.view.ViewCompat${importSuffix}`);
     imports.push(`import androidx.core.view.WindowInsetsCompat${importSuffix}`);
     imports.push(`import androidx.core.graphics.Insets${importSuffix}`);
